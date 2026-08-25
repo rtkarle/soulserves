@@ -482,6 +482,7 @@ input,textarea,select{font-family:inherit}
   .auth-brand{display:none}
   .auth-form-side{padding:40px 24px;min-height:100vh}
   .stats-row{grid-template-columns:repeat(2,1fr)}
+  .nav-container{height:64px;padding:0 16px}
 }
 @media(max-width:768px){
   .section{padding:64px 0}
@@ -494,34 +495,60 @@ input,textarea,select{font-family:inherit}
   .hero-headline{font-size:2.2rem}
   .stories-track .story-card{flex:0 0 280px}
   .guideline-row{grid-template-columns:1fr}
+  .vm-card{padding:28px 20px}
 }
 @media(max-width:600px){
   .container,.container-sm{padding:0 16px}
-  .hero-inner{padding:100px 16px 56px}
+  .hero-inner{padding:90px 16px 48px}
   .brand-pillars{grid-template-columns:1fr}
-  .shop-grid{grid-template-columns:1fr 1fr}
+  .shop-grid{grid-template-columns:1fr}
   .steps-grid{grid-template-columns:1fr 1fr}
   .stats-row{grid-template-columns:1fr 1fr}
   .stat-item+.stat-item::before{display:none}
+  .stat-num{font-size:2rem}
   .footer-grid{grid-template-columns:1fr;gap:24px}
-  .vol-form{padding:24px 20px}
+  .vol-form{padding:20px 16px}
   .donate-tab-bar{flex-direction:column;gap:6px}
-  .btn-xl{padding:14px 28px;font-size:14px}
-  .btn-lg{padding:13px 24px;font-size:14px}
-  .hero-ctas{flex-direction:column;align-items:center}
+  .btn-xl{padding:14px 22px;font-size:14px}
+  .btn-lg{padding:12px 20px;font-size:14px}
+  .hero-ctas{flex-direction:column;align-items:stretch;width:100%}
+  .hero-ctas .btn{justify-content:center}
   .role-cards{grid-template-columns:1fr}
   .auth-form-wrap{padding:0}
-  .toast-container{left:16px;right:16px;bottom:16px}
-  .toast{min-width:unset}
+  .auth-form-side{padding:24px 16px}
+  .toast-container{left:12px;right:12px;bottom:12px}
+  .toast{min-width:unset;font-size:13px}
+  .hero-stats{gap:20px}
+  .hero-stat-num{font-size:1.8rem}
+  /* Hero stat layout: 3 items side by side */
+  .hero-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:0;padding-top:20px}
+  .hero-stat{padding:0 10px;border-right:1px solid rgba(255,255,255,.15)}
+  .hero-stat:last-child{border-right:none}
+  /* Navbar */
+  .logo-text{display:none}
+  .logo-mark{width:36px;height:36px}
 }
 @media(max-width:480px){
-  .hero-stat-num{font-size:1.6rem}
-  .page-hero{padding:120px 0 60px}
+  .hero-stat-num{font-size:1.5rem}
+  .page-hero{padding:110px 0 50px}
   .floating-card{display:none}
-  .vm-card{padding:28px 20px}
-  .contact-form-card,.contact-info-card{padding:28px 20px}
-  .vol-form{padding:20px 16px}
+  .vm-card{padding:22px 16px}
+  .contact-form-card,.contact-info-card{padding:22px 16px}
+  .vol-form{padding:18px 14px}
   .footer-bottom{flex-direction:column;text-align:center}
+  .stats-row{grid-template-columns:1fr 1fr}
+  .shop-grid{grid-template-columns:1fr}
+  .steps-grid{grid-template-columns:1fr}
+  .hero-stats{grid-template-columns:1fr}
+  .hero-stat{border-right:none;border-bottom:1px solid rgba(255,255,255,.1);padding:10px 0}
+  .hero-stat:last-child{border-bottom:none}
+  .faq-q{padding:16px 18px;font-size:14px}
+  .contact-info-card h3{font-size:18px}
+  .auth-card{padding:32px 20px}
+  .vol-form h3{font-size:18px}
+  /* Forms */
+  .form-input,.form-select,.form-textarea{padding:12px 14px;font-size:14px}
+  .btn-primary,.btn-secondary,.btn-brand{padding:12px 20px;font-size:14px}
 }
 
 /* ═══ UTILITY ═══ */

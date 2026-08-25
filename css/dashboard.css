@@ -1336,6 +1336,7 @@ td img { width:44px; height:36px; object-fit:cover; border-radius:8px; border:1p
   .kpi-grid { grid-template-columns:repeat(2,1fr); }
   .overview-grid { grid-template-columns:1fr; }
   .don-cards { grid-template-columns:1fr 1fr; }
+  .topbar-search { min-width:160px; }
 }
 @media(max-width:700px) {
   .sidebar {
@@ -1345,19 +1346,39 @@ td img { width:44px; height:36px; object-fit:cover; border-radius:8px; border:1p
   }
   .sidebar.show,
   .sidebar.open { transform:none; }
-  .main { margin-left:0; padding-top:64px; }
+  .main { margin-left:0; padding-top:0; }
   .mobile-topbar { display:flex; }
   .topbar { display:none; }
   .kpi-grid { grid-template-columns:1fr 1fr; }
-  .page { padding:18px; }
+  .page { padding:16px; }
   .don-cards { grid-template-columns:1fr; }
   .quick-grid { grid-template-columns:1fr 1fr; }
+  .overview-grid { grid-template-columns:1fr; }
+  /* Tables: keep horizontal scroll but reduce padding */
+  td, th { padding:10px 10px; font-size:12px; }
+  /* Cards reduce padding */
+  .card { padding:18px 14px; }
+  .kpi { padding:16px 14px; }
 }
 @media(max-width:480px) {
   .kpi-grid { grid-template-columns:1fr 1fr; }
   .kpi-value { font-size:24px; }
   .form-row { grid-template-columns:1fr; }
-  .welcome-band { flex-direction:column; }
+  .welcome-band { flex-direction:column; align-items:stretch; }
+  .wb-actions { justify-content:stretch; }
+  .wb-actions .wb-btn { flex:1; justify-content:center; text-align:center; }
+  .page { padding:12px; }
+  .kpi { padding:14px 12px; }
+  .kpi-label { font-size:9px; }
+  .kpi-value { font-size:22px; }
+  td, th { padding:8px; font-size:11px; }
+  .section-title { font-size:14px; }
+  /* Donation grid single col */
+  .donation-grid { grid-template-columns:1fr; }
+  .product-mini-grid { grid-template-columns:1fr 1fr; }
+  /* Modal fullscreen on mobile */
+  .modal { border-radius:16px 16px 0 0; max-height:95vh; position:fixed; bottom:0; left:0; right:0; width:100%; border-radius:20px 20px 0 0; }
+  .modal-overlay { align-items:flex-end; padding:0; }
 }
 
 /* ══ MOBILE PERFORMANCE — added v4.0 ══ */
@@ -1424,3 +1445,213 @@ td img { width:44px; height:36px; object-fit:cover; border-radius:8px; border:1p
 
 /* Fix for sidebar logo img on dark background */
 .sidebar-logo-mark img{ filter:brightness(0) invert(1); }
+
+/* ══ ADDITIONAL MOBILE FIXES v4.1 ══ */
+
+/* ── All dashboard welcome bands stack on mobile ── */
+@media(max-width:700px){
+  .welcome-band,.vwb,.swb{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:12px;
+    border-radius:16px;
+    padding:18px;
+  }
+  .wb-actions,.vwb-btns,.swb-b{
+    width:100%;
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .wb-btn,.vwb-btn,.swb-btn{
+    flex:1;
+    min-width:calc(50% - 4px);
+    justify-content:center;
+    text-align:center;
+    padding:10px 12px;
+    font-size:12px;
+  }
+}
+
+/* ── All dashboard KPI rows ── */
+@media(max-width:480px){
+  /* Cards grid single col on tiny screens */
+  .cards{grid-template-columns:1fr 1fr;gap:10px}
+  .card h1{font-size:26px}
+  .card p{font-size:10px}
+  /* Stat chips */
+  .stat-row{grid-template-columns:1fr 1fr;gap:8px}
+  .stat-chip h2{font-size:22px}
+  .stat-chip p{font-size:10px}
+}
+
+/* ── Tables on mobile ── */
+@media(max-width:600px){
+  .table-card{border-radius:12px}
+  .table-header{padding:14px 16px;flex-direction:column;align-items:flex-start}
+  .table-header h3{font-size:14px}
+  th{padding:9px 10px;font-size:9px;letter-spacing:.3px}
+  td{padding:10px 10px;font-size:12px}
+  td img{width:36px;height:30px}
+  /* Donation grid 1 col */
+  .donation-grid{grid-template-columns:1fr}
+  /* Product mini grid 2 col */
+  .product-mini-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .pm-img,.pm-img-ph{height:120px;font-size:28px}
+  .pm-body{padding:10px 10px 12px}
+  .pm-name{font-size:12px}
+  .pm-store{font-size:10px}
+  /* Don card */
+  .don-card-img,.don-card-img-ph{height:140px;font-size:36px}
+  .don-card-body{padding:12px 12px 8px}
+  .don-card-body h4{font-size:15px}
+  .don-card-footer{padding:0 12px 12px}
+  /* Shop promo */
+  .shop-promo{flex-direction:column;padding:18px;border-radius:16px}
+  .shop-promo h3{font-size:17px}
+  .shop-promo-btn{width:100%;justify-content:center;padding:11px}
+}
+
+/* ── Sidebar on mobile — ensure proper z-index and overlay ── */
+@media(max-width:700px){
+  .sidebar{
+    position:fixed;
+    top:0;left:0;
+    height:100vh;
+    width:260px;
+    transform:translateX(-100%);
+    z-index:500;
+    transition:transform .28s cubic-bezier(.22,1,.36,1);
+    will-change:transform;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .sidebar.open,.sidebar.show{
+    transform:translateX(0);
+    box-shadow:4px 0 32px rgba(0,0,0,.35);
+  }
+  .sidebar-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.52);
+    z-index:499;
+    backdrop-filter:blur(2px);
+    -webkit-backdrop-filter:blur(2px);
+  }
+  .sidebar-overlay.show{display:block;animation:fadeIn .25s ease}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .main{margin-left:0 !important}
+  .mobile-topbar{display:flex !important}
+  .topbar{display:none}
+  /* Bigger hit targets in sidebar */
+  .nav-btn,.nav-item{
+    min-height:48px;
+    padding:13px 16px;
+    font-size:14px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .logout-link{min-height:48px}
+  /* Hamburger */
+  .hamburger{
+    min-width:44px;
+    min-height:44px;
+    display:flex !important;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:5px;
+    padding:8px;
+    cursor:pointer;
+    background:none;
+    border:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .hamburger span{
+    display:block;
+    width:22px;
+    height:2px;
+    background:var(--navy);
+    border-radius:2px;
+    transition:all .3s var(--ease);
+  }
+  /* Page padding */
+  .page{padding:14px !important}
+}
+
+/* ── Forms on mobile ── */
+@media(max-width:600px){
+  .form-field input,
+  .form-field select,
+  .form-field textarea,
+  .field input,
+  .field select,
+  .field textarea{
+    font-size:16px; /* Prevents iOS auto-zoom */
+    padding:12px 14px;
+  }
+  .form-row,.form-grid{grid-template-columns:1fr}
+  .field.full{grid-column:1/-1}
+}
+
+/* ── Modal bottom-sheet on mobile ── */
+@media(max-width:600px){
+  .modal-overlay{align-items:flex-end;padding:0}
+  .modal{
+    border-radius:20px 20px 0 0;
+    padding:28px 20px;
+    max-height:92vh;
+    width:100%;
+    max-width:100%;
+    overflow-y:auto;
+  }
+  /* Proof modal */
+  .proof-overlay{align-items:flex-end;padding:0}
+  .proof-modal{
+    border-radius:20px 20px 0 0;
+    padding:24px 18px;
+    max-height:90vh;
+    width:100%;
+    border-radius:20px 20px 0 0 !important;
+  }
+}
+
+/* ── Nav public pages (mobile menu items) ── */
+@media(max-width:900px){
+  .nav-link{
+    min-height:48px;
+    display:flex;
+    align-items:center;
+    -webkit-tap-highlight-color:transparent;
+  }
+}
+
+/* ── Prevent content-visibility from breaking animations ── */
+@media(max-width:700px){
+  .page > section,
+  .page > div{
+    content-visibility:visible;
+    contain-intrinsic-size:unset;
+  }
+}
+
+/* ── Fix: active nav item indicator on mobile ── */
+.nav-item.active::before,
+.nav-btn.active::before{
+  left:0;
+  border-radius:0 3px 3px 0;
+}
+
+/* ── Touch scroll for horizontal elements ── */
+.tl-steps,
+.don-table-scroll,
+.table-scroll{
+  -webkit-overflow-scrolling:touch;
+  scroll-snap-type:x mandatory;
+}
+
+/* ── Tap highlight removal ── */
+a,button,.nav-btn,.nav-item,.wb-btn,.vwb-btn,.swb-btn,
+.kpi-card,.vkpi,.skpi,.pm-card,.vdon-card,.prod-card{
+  -webkit-tap-highlight-color:transparent;
+}

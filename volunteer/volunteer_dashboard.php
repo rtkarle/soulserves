@@ -3,13 +3,32 @@ session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/upload.php';
 require_once __DIR__ . '/../api/ai_engine.php';
+/* ── Role-based access guard ── */
 if (!isset($_SESSION['user_email'])) { header("Location: ../auth/login.php"); exit; }
+if (isset($_SESSION['role']) && $_SESSION['role'] !== 'volunteer') {
+    switch ($_SESSION['role']) {
+        case 'donor':   header("Location: ../donor/donor_dashboard.php");   exit;
+        case 'seller':  header("Location: ../seller/seller_dashboard.php"); exit;
+        case 'admin':   header("Location: ../admin/admin_dashboard.php");   exit;
+    }
+}
 $email = $_SESSION['user_email'];
-
 $q = $conn->prepare("SELECT * FROM register WHERE email=? AND role='volunteer' AND verified=1");
 $q->bind_param("s",$email); $q->execute();
 $res = $q->get_result();
-if($res->num_rows!==1){ header("Location: ../auth/login.php"); exit; }
+if ($res->num_rows !== 1) {
+    $chk = $conn->prepare("SELECT role FROM register WHERE email=? AND verified=1");
+    $chk->bind_param("s",$email); $chk->execute();
+    $row = $chk->get_result()->fetch_assoc();
+    if ($row) {
+        $_SESSION['role'] = $row['role'];
+        switch ($row['role']) {
+            case 'donor':  header("Location: ../donor/donor_dashboard.php");   exit;
+            case 'seller': header("Location: ../seller/seller_dashboard.php"); exit;
+        }
+    }
+    header("Location: ../auth/login.php"); exit;
+}
 $user = $res->fetch_assoc();
 
 /* ── POST: task accept/reject ── */
@@ -249,8 +268,52 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
 .empty-state{background:#f9fbfa;border:1px dashed rgba(16,42,67,.12);border-radius:16px;padding:40px;text-align:center;color:var(--muted)}
 .empty-state .emoji{font-size:40px;display:block;margin-bottom:12px}
 /* Responsive */
-@media(max-width:900px){.vkpi-row{grid-template-columns:repeat(3,1fr)}.vdon-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:600px){.vkpi-row{grid-template-columns:repeat(2,1fr);gap:10px}.vdon-grid{grid-template-columns:1fr}.page{padding:12px}.impact-ring-wrap{flex-direction:column;text-align:center}}
+@media(max-width:1200px){.vkpi-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:900px){
+  .vkpi-row{grid-template-columns:repeat(3,1fr)}
+  .vdon-grid{grid-template-columns:1fr 1fr}
+  .peer-grid{grid-template-columns:repeat(2,1fr)}
+  .impact-ring-wrap{gap:16px}
+  .vwb{padding:20px 22px;border-radius:18px}
+}
+@media(max-width:700px){
+  .vkpi-row{grid-template-columns:repeat(2,1fr);gap:10px}
+  .vdon-grid{grid-template-columns:1fr}
+  .peer-grid{grid-template-columns:repeat(2,1fr)}
+  .page{padding:14px}
+  .vwb{padding:16px;border-radius:16px}
+  .vwb-title{font-size:17px}
+  .route-card{padding:14px 16px}
+  .vtask-card{padding:14px 16px}
+  .vol-map{height:220px}
+  .ai-vol-body{padding:12px 16px;gap:8px}
+  .vchat-msgs{height:200px}
+  .ai-vol-panel{border-radius:16px}
+}
+@media(max-width:480px){
+  .vkpi-row{grid-template-columns:1fr 1fr;gap:8px}
+  .vkpi-val{font-size:22px}
+  .vkpi-icon{width:36px;height:36px;font-size:17px;margin-bottom:8px}
+  .vdon-grid{grid-template-columns:1fr}
+  .peer-grid{grid-template-columns:1fr}
+  .impact-ring-wrap{flex-direction:column;text-align:center;padding:16px}
+  .impact-ring{width:80px;height:80px}
+  .impact-ring-num{font-size:20px}
+  .impact-info h3{font-size:16px}
+  .impact-info p{font-size:12px}
+  .page{padding:12px}
+  .vwb{padding:14px;border-radius:14px}
+  .vwb-title{font-size:16px}
+  .vwb-btns{gap:6px}
+  .vwb-btn{padding:7px 13px;font-size:12px}
+  .vtask-actions{flex-direction:column}
+  .btn-accept,.btn-reject{width:100%;text-align:center}
+  .route-step{gap:8px}
+  .vol-map{height:180px}
+  .vchat-msgs{height:180px}
+  .sec-head h3{font-size:13px}
+  .vol-badge-chip{padding:6px 10px}
+}
 @keyframes fUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 </style>
 </head>

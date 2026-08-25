@@ -4,12 +4,35 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/upload.php';
 require_once __DIR__ . '/../api/ai_engine.php';
 require_once __DIR__ . '/../api/award_badges.php';
+
+/* ── Role-based access guard ── */
 if (!isset($_SESSION['user_email'])) { header("Location: ../auth/login.php"); exit; }
+/* If role is set in session and is NOT donor, redirect to correct dashboard */
+if (isset($_SESSION['role']) && $_SESSION['role'] !== 'donor') {
+    switch ($_SESSION['role']) {
+        case 'volunteer': header("Location: ../volunteer/volunteer_dashboard.php"); exit;
+        case 'seller':    header("Location: ../seller/seller_dashboard.php");      exit;
+        case 'admin':     header("Location: ../admin/admin_dashboard.php");        exit;
+    }
+}
 $email = $_SESSION['user_email'];
 $u = $conn->prepare("SELECT * FROM register WHERE email=? AND role='donor' AND verified=1");
 $u->bind_param("s",$email); $u->execute();
 $user = $u->get_result()->fetch_assoc();
-if (!$user) { header("Location: ../auth/login.php"); exit; }
+if (!$user) {
+    /* User exists but not as donor — fix session role and redirect */
+    $chk = $conn->prepare("SELECT role FROM register WHERE email=? AND verified=1");
+    $chk->bind_param("s",$email); $chk->execute();
+    $row = $chk->get_result()->fetch_assoc();
+    if ($row) {
+        $_SESSION['role'] = $row['role'];
+        switch ($row['role']) {
+            case 'volunteer': header("Location: ../volunteer/volunteer_dashboard.php"); exit;
+            case 'seller':    header("Location: ../seller/seller_dashboard.php");      exit;
+        }
+    }
+    header("Location: ../auth/login.php"); exit;
+}
 
 /* ── helpers ── */
 function sc2($conn,$sql,$p=null,$t=null){
@@ -271,8 +294,65 @@ $STATUS_ICONS =['📝','✅','📅','🚚','📦','🎉'];
 /* Mobile topbar */
 .mobile-topbar{background:#fff;border-bottom:1px solid rgba(16,42,67,.08)}
 /* Responsive */
-@media(max-width:900px){.kpi-row{grid-template-columns:repeat(3,1fr)}.pm-grid{grid-template-columns:repeat(2,1fr)}.how-grid{grid-template-columns:repeat(2,1fr)}.causes-grid{grid-template-columns:1fr}.report-grid{grid-template-columns:repeat(2,1fr)}.ai-impact-strip{grid-template-columns:1fr 1fr}.ai-imp:last-child{grid-column:1/-1;border-right:none;border-top:1px solid rgba(255,255,255,.1)}}
-@media(max-width:600px){.kpi-row{grid-template-columns:repeat(2,1fr);gap:10px}.pm-grid{grid-template-columns:repeat(2,1fr)}.how-grid{grid-template-columns:1fr 1fr}.welcome-band{padding:18px;border-radius:18px}.track-card{padding:14px}.page{padding:12px}.report-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:1200px){.kpi-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:900px){
+  .kpi-row{grid-template-columns:repeat(3,1fr)}
+  .pm-grid{grid-template-columns:repeat(2,1fr)}
+  .how-grid{grid-template-columns:repeat(2,1fr)}
+  .causes-grid{grid-template-columns:1fr}
+  .report-grid{grid-template-columns:repeat(2,1fr)}
+  .ai-impact-strip{grid-template-columns:1fr 1fr}
+  .ai-imp:last-child{grid-column:1/-1;border-right:none;border-top:1px solid rgba(255,255,255,.1)}
+  .vwb,.swb,.welcome-band{padding:20px 22px;border-radius:18px}
+  .shop-strip{flex-direction:column;align-items:flex-start;gap:10px}
+  .donate-cta{flex-direction:column;align-items:flex-start}
+}
+@media(max-width:700px){
+  .kpi-row{grid-template-columns:repeat(2,1fr);gap:10px}
+  .pm-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  .how-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .causes-grid{grid-template-columns:1fr}
+  .report-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .welcome-band{padding:16px;border-radius:16px}
+  .wb-title{font-size:18px}
+  .track-card{padding:14px}
+  .page{padding:14px}
+  .don-table th,.don-table td{padding:9px 10px;font-size:12px}
+  .badges-wrap{gap:8px}
+  .badge-chip{padding:7px 11px}
+  .rec-card{flex-direction:column;align-items:flex-start}
+  .ai-impact-strip{grid-template-columns:repeat(3,1fr)}
+  .ai-imp{padding:12px 10px}
+  .ai-imp-val{font-size:16px}
+  .tl-steps{gap:0}
+  .tl-dot{width:22px;height:22px;font-size:10px}
+  .tl-label{font-size:7px;max-width:40px}
+}
+@media(max-width:480px){
+  .kpi-row{grid-template-columns:1fr 1fr;gap:8px}
+  .kpi-val{font-size:22px}
+  .kpi-icon{width:36px;height:36px;font-size:17px;margin-bottom:8px}
+  .pm-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .how-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .report-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .rep-stat-val{font-size:18px}
+  .page{padding:12px}
+  .welcome-band{padding:14px;border-radius:14px}
+  .wb-title{font-size:16px}
+  .wb-sub{font-size:12px}
+  .wb-btns{gap:7px}
+  .wb-btn{padding:7px 14px;font-size:12px}
+  .track-card{padding:12px}
+  .tl-dot{width:20px;height:20px}
+  .ai-chat-messages{height:200px}
+  .ai-impact-strip{grid-template-columns:repeat(3,1fr)}
+  .sec-head h3{font-size:14px}
+  .don-table-wrap{border-radius:12px}
+  .success-notice{padding:12px 14px;gap:10px}
+  .success-notice h4{font-size:13px}
+  .shop-strip{padding:14px 16px}
+  .shop-strip h3{font-size:15px}
+}
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
 </style>
 </head>

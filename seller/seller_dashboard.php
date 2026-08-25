@@ -3,7 +3,24 @@ session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/upload.php';
 require_once __DIR__ . '/../api/ai_engine.php';
-if (!isset($_SESSION['user_email']) || $_SESSION['role'] !== 'seller') {
+
+/* ── Role-based access guard ── */
+if (!isset($_SESSION['user_email'])) { header("Location: ../auth/login.php"); exit; }
+/* If logged in but NOT a seller, redirect to their correct dashboard */
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'seller') {
+    /* Fix session role from DB if stale */
+    require_once __DIR__ . '/../config/db.php';
+    $chk = $conn->prepare("SELECT role FROM register WHERE email=? AND verified=1");
+    $chk->bind_param("s", $_SESSION['user_email']); $chk->execute();
+    $row = $chk->get_result()->fetch_assoc();
+    if ($row) {
+        $_SESSION['role'] = $row['role'];
+        switch ($row['role']) {
+            case 'donor':     header("Location: ../donor/donor_dashboard.php");       exit;
+            case 'volunteer': header("Location: ../volunteer/volunteer_dashboard.php"); exit;
+            case 'admin':     header("Location: ../admin/admin_dashboard.php");        exit;
+        }
+    }
     header("Location: ../auth/login.php"); exit;
 }
 $email = $_SESSION['user_email'];
@@ -196,9 +213,44 @@ $cats   = ['handicraft'=>'Handicraft','textile'=>'Textile','food_product'=>'Food
 .empty-state{background:#f9fbfa;border:1px dashed rgba(16,42,67,.12);border-radius:16px;padding:40px;text-align:center;color:var(--muted)}
 .empty-state .emoji{font-size:40px;display:block;margin-bottom:12px}
 .desc-result{background:linear-gradient(135deg,rgba(0,109,119,.06),rgba(46,139,87,.04));border:1.5px solid rgba(0,109,119,.2);border-radius:14px;padding:16px;font-size:13px;color:var(--navy);line-height:1.7;margin-top:14px;display:none}
-@media(max-width:1100px){.skpi-row{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:900px){.skpi-row{grid-template-columns:repeat(2,1fr)}.demand-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:600px){.skpi-row{grid-template-columns:repeat(2,1fr);gap:10px}.form-grid{grid-template-columns:1fr}.page{padding:12px}}
+@media(max-width:1100px){.skpi-row{grid-template-columns:repeat(3,1fr)}.prod-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:900px){
+  .skpi-row{grid-template-columns:repeat(3,1fr)}
+  .demand-grid{grid-template-columns:repeat(2,1fr)}
+  .prod-grid{grid-template-columns:repeat(2,1fr)}
+  .swb{padding:20px 22px;border-radius:18px}
+}
+@media(max-width:700px){
+  .skpi-row{grid-template-columns:repeat(2,1fr);gap:10px}
+  .demand-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  .prod-grid{grid-template-columns:repeat(2,1fr);gap:10px}
+  .form-grid{grid-template-columns:1fr 1fr}
+  .page{padding:14px}
+  .swb{padding:16px;border-radius:16px}
+  .swb-t{font-size:18px}
+  .sc-msgs{height:200px}
+  .ai-s-panel{border-radius:16px}
+}
+@media(max-width:480px){
+  .skpi-row{grid-template-columns:1fr 1fr;gap:8px}
+  .skpi-val{font-size:22px}
+  .skpi-icon{width:36px;height:36px;font-size:17px;margin-bottom:8px}
+  .demand-grid{grid-template-columns:1fr}
+  .prod-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .form-grid{grid-template-columns:1fr}
+  .page{padding:12px}
+  .swb{padding:14px;border-radius:14px}
+  .swb-t{font-size:16px}
+  .swb-b{gap:6px}
+  .swb-btn{padding:7px 13px;font-size:12px}
+  .form-card{padding:20px 16px}
+  .form-btn{width:100%;justify-content:center;padding:12px}
+  .sc-msgs{height:180px}
+  .sec-head h3{font-size:13px}
+  .prod-ai-row{font-size:10px}
+  .prod-body{padding:10px}
+  .no-store{flex-direction:column;gap:10px}
+}
 </style>
 </head>
 <body>

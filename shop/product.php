@@ -2,11 +2,17 @@
 session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/upload.php';
-require_once __DIR__ . '/../api/ai_engine.php';
-if (!isset($_SESSION['user_email'])) { header("Location: ../auth/login.php"); exit; }
-$me   = $_SESSION['user_email'];
+
+/* ── Guest-friendly — no login required to view products ── */
+$is_logged_in = isset($_SESSION['user_email']);
+$me   = $is_logged_in ? $_SESSION['user_email'] : '';
 $role = $_SESSION['role'] ?? 'donor';
-$ai   = adhaar_ai();
+
+$ai = null;
+if ($is_logged_in) {
+    require_once __DIR__ . '/../api/ai_engine.php';
+    $ai = adhaar_ai();
+}
 
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) { header("Location: shop.php"); exit; }
@@ -16,8 +22,8 @@ $pq->bind_param("i",$id); $pq->execute();
 $p = $pq->get_result()->fetch_assoc();
 if (!$p) { header("Location: shop.php"); exit; }
 
-// ── Log product view for AI recommendations ───────────────────
-$ai->logView($me, $id);
+// ── Log product view for AI recommendations (logged-in only) ───────────────────
+if ($ai) $ai->logView($me, $id);
 
 $rq = $conn->prepare("SELECT r.*, u.name FROM product_reviews r JOIN register u ON u.email=r.reviewer_email WHERE r.product_id=? ORDER BY r.created_at DESC LIMIT 20");
 $rq->bind_param("i",$id); $rq->execute();
@@ -43,7 +49,7 @@ if ($ord_row) {
 $ai_recs = $ai->getProductRecommendations($me, $id, 4);
 
 $related    = $conn->query("SELECT p.*, s.store_name FROM products p JOIN seller_stores s ON s.seller_email=p.seller_email WHERE p.category='".mysqli_real_escape_string($conn,$p['category'])."' AND p.id!=$id AND p.is_active=1 LIMIT 4")->fetch_all(MYSQLI_ASSOC);
-$cart_count = (int)$conn->query("SELECT COUNT(*) c FROM cart WHERE user_email='".mysqli_real_escape_string($conn,$me)."'")->fetch_assoc()['c'];
+$cart_count = $is_logged_in ? (int)$conn->query("SELECT COUNT(*) c FROM cart WHERE user_email='".mysqli_real_escape_string($conn,$me)."'")->fetch_assoc()['c'] : 0;
 $discount   = ($p['mrp'] && $p['mrp']>$p['price']) ? round((($p['mrp']-$p['price'])/$p['mrp'])*100) : 0;
 ?>
 <!DOCTYPE html>
@@ -165,8 +171,13 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
     <a href="../index.html" class="logo"><img src="../assets/logo.png" alt="SoulServe" style="height:36px;object-fit:contain;vertical-align:middle"></a>
     <div class="nav-links">
       <a href="shop.php">← Shop</a>
+      <?php if($is_logged_in): ?>
       <a href="my_orders.php">📋 Orders</a>
       <a href="cart.php" class="cart-btn">🛒 Cart<?php if($cart_count>0): ?><span class="cart-count"><?=$cart_count?></span><?php endif; ?></a>
+      <?php else: ?>
+      <a href="#" onclick="openGuestModal('login');return false" style="color:var(--teal);font-weight:700">Sign In</a>
+      <a href="#" onclick="openGuestModal('register');return false" class="cart-btn">🛒 Cart</a>
+      <?php endif; ?>
     </div>
   </div>
 </header>
@@ -358,6 +369,8 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
 
 </div>
 <script>
+const IS_LOGGED_IN = <?=$is_logged_in?'true':'false'?>;
+
 function setImg(thumb, src, idx) {
   document.querySelectorAll('.img-thumb').forEach(t=>t.classList.remove('active'));
   thumb.classList.add('active');
@@ -368,7 +381,13 @@ function changeQty(d) {
   inp.value = Math.max(1, Math.min(<?=(int)$p['stock']?>, +inp.value + d));
 }
 function addToCart() {
+  /* Guest: show registration modal */
+  if (!IS_LOGGED_IN) { openGuestModal('register'); return; }
+
   const qty = document.getElementById('qty').value;
+  const btn = document.getElementById('addCartBtn');
+  btn.disabled=true; btn.textContent='⏳ Adding…';
+
   fetch('../api/cart_action.php', {
     method:'POST',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
@@ -376,13 +395,20 @@ function addToCart() {
   })
   .then(r=>r.json())
   .then(d=>{
-    const btn = document.getElementById('addCartBtn');
-    if(d.success){
+    btn.disabled=false;
+    if (d.needs_login) { openGuestModal('register'); return; }
+    if (d.success) {
       btn.textContent='✅ Added to Cart!';
       btn.style.background='linear-gradient(135deg,#059669,#10b981)';
-      setTimeout(()=>{btn.textContent='🛒 Add to Cart';btn.style.background='';},2500);
-    } else { alert(d.message||'Error adding to cart'); }
-  });
+      setTimeout(()=>{ btn.textContent='🛒 Add to Cart'; btn.style.background=''; btn.disabled=false; },2500);
+      /* update cart badge */
+      document.querySelectorAll('.cart-count').forEach(el=>el.textContent=d.cart_count);
+    } else {
+      btn.textContent='🛒 Add to Cart';
+      alert(d.message || 'Could not add to cart');
+    }
+  })
+  .catch(()=>{ btn.disabled=false; btn.textContent='🛒 Add to Cart'; });
 }
 
 /* ── Star rating picker ── */
@@ -444,5 +470,110 @@ async function submitReview() {
   }
 }
 </script>
-</body>
+
+<!-- ══ GUEST MODAL (same as shop.php) ══ -->
+<style>
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
+.modal-overlay.open{display:flex}
+.modal-box{background:#fff;border-radius:24px;padding:36px 32px;max-width:440px;width:100%;box-shadow:0 32px 80px rgba(0,0,0,.3);animation:mIn .3s cubic-bezier(.22,1,.36,1);max-height:92vh;overflow-y:auto;position:relative}
+@keyframes mIn{from{opacity:0;transform:translateY(24px) scale(.96)}to{opacity:1;transform:none}}
+.modal-close{position:absolute;top:14px;right:18px;font-size:20px;cursor:pointer;background:none;border:none;color:#5A7184;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:.2s}
+.modal-close:hover{background:#F7FAF9}
+.modal-tabs{display:flex;gap:0;background:#F7FAF9;border-radius:10px;padding:4px;margin-bottom:22px}
+.modal-tab{flex:1;padding:9px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-align:center;transition:.2s;border:none;background:none;color:#5A7184}
+.modal-tab.active{background:#fff;color:#006D77;box-shadow:0 2px 8px rgba(16,42,67,.08)}
+.modal-form{display:none}.modal-form.active{display:block}
+.mf-group{margin-bottom:14px}
+.mf-label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#5A7184;margin-bottom:6px}
+.mf-input{width:100%;padding:12px 14px;border:1.5px solid #E2EBE9;border-radius:10px;font-size:14px;outline:none;transition:.2s;font-family:inherit;background:#fafaf6}
+.mf-input:focus{border-color:#006D77;box-shadow:0 0 0 3px rgba(0,109,119,.1);background:#fff}
+.mf-btn{width:100%;padding:13px;border:none;border-radius:10px;background:linear-gradient(135deg,#006D77,#2E8B57);color:#fff;font-size:14px;font-weight:800;cursor:pointer;transition:.2s;margin-top:6px}
+.mf-btn:hover{opacity:.9;transform:translateY(-1px)}.mf-btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+.mf-err{background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:14px;display:none}
+.mf-ok{background:#d1fae5;border:1px solid #6ee7b7;color:#065f46;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:14px;display:none}
+.div-or{display:flex;align-items:center;gap:10px;margin:14px 0;font-size:12px;font-weight:600;color:#94A3B8}
+.div-or::before,.div-or::after{content:'';flex:1;height:1px;background:#E2EBE9}
+@media(max-width:480px){.modal-box{padding:24px 18px;border-radius:18px}}
+</style>
+
+<div class="modal-overlay" id="guestModal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeGuestModal()">✕</button>
+    <div style="text-align:center;margin-bottom:16px"><img src="../assets/logo.png" alt="SoulServe" style="height:40px;object-fit:contain"></div>
+    <div style="font-size:21px;font-weight:900;color:#102A43;text-align:center;margin-bottom:6px">Join SoulServe</div>
+    <p style="font-size:13px;color:#5A7184;text-align:center;margin-bottom:22px;line-height:1.6">Create a free account to add to cart, track orders &amp; support rural artisans.</p>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="mtab-reg" onclick="switchMTab('register')">Create Account</button>
+      <button class="modal-tab" id="mtab-login" onclick="switchMTab('login')">Sign In</button>
+    </div>
+    <!-- Register -->
+    <div class="modal-form active" id="mform-register">
+      <div id="merr" class="mf-err"></div><div id="mok" class="mf-ok"></div>
+      <div class="mf-group"><label class="mf-label">Full Name *</label><input class="mf-input" id="m-name" type="text" placeholder="Your name" autocomplete="name"></div>
+      <div class="mf-group"><label class="mf-label">Email *</label><input class="mf-input" id="m-email" type="email" placeholder="you@email.com" autocomplete="email"></div>
+      <div class="mf-group"><label class="mf-label">Password *</label><input class="mf-input" id="m-pwd" type="password" placeholder="Min. 6 characters" autocomplete="new-password"></div>
+      <div class="mf-group"><label class="mf-label">Phone (optional)</label><input class="mf-input" id="m-phone" type="tel" placeholder="+91 98765 43210"></div>
+      <button class="mf-btn" id="m-regbtn" onclick="doRegister()">Create Account &amp; Add to Cart →</button>
+      <p style="text-align:center;font-size:11px;color:#94A3B8;margin-top:10px">Free forever. No spam.</p>
+    </div>
+    <!-- Login -->
+    <div class="modal-form" id="mform-login">
+      <div id="lerr" class="mf-err"></div><div id="lok" class="mf-ok"></div>
+      <div class="mf-group"><label class="mf-label">Email</label><input class="mf-input" id="l-email" type="email" placeholder="you@email.com" autocomplete="email"></div>
+      <div class="mf-group"><label class="mf-label">Password</label><input class="mf-input" id="l-pwd" type="password" placeholder="Your password" autocomplete="current-password"></div>
+      <button class="mf-btn" id="m-loginbtn" onclick="doLogin()">Sign In &amp; Continue →</button>
+      <div class="div-or">or</div>
+      <a href="../auth/google_login.php" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:11px;border:1.5px solid #E2EBE9;border-radius:10px;font-size:13px;font-weight:600;color:#102A43;text-decoration:none">
+        <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Continue with Google
+      </a>
+      <p style="text-align:center;margin-top:12px;font-size:12px"><a href="../auth/forgot.php" style="color:#006D77;font-weight:600">Forgot password?</a></p>
+    </div>
+  </div>
+</div>
+
+<script>
+function openGuestModal(tab){ switchMTab(tab||'register'); document.getElementById('guestModal').classList.add('open'); document.body.style.overflow='hidden'; }
+function closeGuestModal(){ document.getElementById('guestModal').classList.remove('open'); document.body.style.overflow=''; }
+document.getElementById('guestModal').addEventListener('click',e=>{ if(e.target===document.getElementById('guestModal')) closeGuestModal(); });
+function switchMTab(t){
+  ['register','login'].forEach(x=>{
+    document.getElementById('mform-'+x).classList.toggle('active',x===t);
+    document.getElementById('mtab-'+x.replace('register','reg')).classList.toggle('active',x===t);
+  });
+}
+function doRegister(){
+  const name=document.getElementById('m-name').value.trim();
+  const email=document.getElementById('m-email').value.trim();
+  const pwd=document.getElementById('m-pwd').value;
+  const phone=document.getElementById('m-phone').value.trim();
+  const err=document.getElementById('merr'); const ok=document.getElementById('mok');
+  err.style.display='none'; ok.style.display='none';
+  if(!name||!email||!pwd){err.textContent='Please fill in all required fields.';err.style.display='block';return;}
+  if(pwd.length<6){err.textContent='Password must be at least 6 characters.';err.style.display='block';return;}
+  const btn=document.getElementById('m-regbtn'); btn.disabled=true; btn.textContent='Creating…';
+  fetch('../api/register_customer.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'name='+encodeURIComponent(name)+'&email='+encodeURIComponent(email)+'&password='+encodeURIComponent(pwd)+'&phone='+encodeURIComponent(phone)})
+    .then(r=>r.json()).then(d=>{
+      btn.disabled=false; btn.textContent='Create Account & Add to Cart →';
+      if(d.ok){ok.textContent=d.message;ok.style.display='block';setTimeout(()=>location.reload(),1200);}
+      else{err.textContent=d.message;err.style.display='block';}
+    }).catch(()=>{btn.disabled=false;err.textContent='Network error.';err.style.display='block';});
+}
+function doLogin(){
+  const email=document.getElementById('l-email').value.trim();
+  const pwd=document.getElementById('l-pwd').value;
+  const err=document.getElementById('lerr'); const ok=document.getElementById('lok');
+  err.style.display='none'; ok.style.display='none';
+  if(!email||!pwd){err.textContent='Please enter email and password.';err.style.display='block';return;}
+  const btn=document.getElementById('m-loginbtn'); btn.disabled=true; btn.textContent='Signing in…';
+  fetch('../api/register_customer.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'email='+encodeURIComponent(email)+'&password='+encodeURIComponent(pwd)+'&name=&phone='})
+    .then(r=>r.json()).then(d=>{
+      btn.disabled=false; btn.textContent='Sign In & Continue →';
+      if(d.ok){ok.textContent=d.message||'Signed in!';ok.style.display='block';setTimeout(()=>location.reload(),1000);}
+      else{window.location.href='../auth/login.php?redirect='+encodeURIComponent('shop/product.php?id=<?=(int)$p["id"]?>');}
+    }).catch(()=>{btn.disabled=false;window.location.href='../auth/login.php';});
+}
+document.getElementById('l-pwd').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+document.getElementById('m-pwd').addEventListener('keydown',e=>{if(e.key==='Enter')doRegister();});
+</script></body>
 </html>

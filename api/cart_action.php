@@ -3,7 +3,10 @@ session_start();
 require_once __DIR__ . '/../config/db.php';
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user_email'])) { echo json_encode(['success'=>false,'message'=>'Not logged in']); exit; }
+if (!isset($_SESSION['user_email'])) {
+    echo json_encode(['success'=>false,'needs_login'=>true,'message'=>'Please sign in to add items to cart']);
+    exit;
+}
 
 $me     = $_SESSION['user_email'];
 $action = $_POST['action'] ?? '';
