@@ -97,6 +97,7 @@ $cats = [
     'organic'     => '🌿 Organic',
     'other'       => '📦 Other',
 ];
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -370,7 +371,7 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
         <?php endif; ?>
         <button class="add-cart-btn" id="btn-<?=(int)$p['id']?>"
           onclick="addToCart(event,<?=(int)$p['id']?>)"
-          <?=$p['stock']<=0?'disabled':'?'?>>
+          <?=$p['stock']<=0?'disabled':''?>>
           <?=$p['stock']<=0?'Out of Stock':'🛒 Add to Cart'?>
         </button>
       </div>
