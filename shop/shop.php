@@ -1,9 +1,9 @@
-<?php
+﻿<?php
 session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/upload.php';
 
-/* ── Guest-friendly shop — no login required to browse ── */
+/* â”€â”€ Guest-friendly shop â€” no login required to browse â”€â”€ */
 $is_logged_in = isset($_SESSION['user_email']);
 $me   = $is_logged_in ? $_SESSION['user_email'] : '';
 $role = $_SESSION['role'] ?? 'donor';
@@ -22,28 +22,28 @@ $price_min = isset($_GET['pmin']) && $_GET['pmin'] !== '' ? (float)$_GET['pmin']
 $price_max = isset($_GET['pmax']) && $_GET['pmax'] !== '' ? (float)$_GET['pmax'] : null;
 $min_rating= isset($_GET['rating']) && $_GET['rating'] !== '' ? (float)$_GET['rating'] : null;
 
-/* ── Whitelist category to prevent injection ── */
+/* â”€â”€ Whitelist category to prevent injection â”€â”€ */
 $allowed_cats = ['handicraft','textile','food_product','jewelry','art','pottery','organic','other'];
 if ($cat !== 'all' && !in_array($cat, $allowed_cats, true)) $cat = 'all';
 
-/* ── Whitelist sort ── */
+/* â”€â”€ Whitelist sort â”€â”€ */
 $allowed_sorts = ['newest','price_low','price_high','popular','rating','discount'];
 if (!in_array($sort, $allowed_sorts, true)) $sort = 'newest';
 
-/* ── Clamp price range to prevent absurd values ── */
+/* â”€â”€ Clamp price range to prevent absurd values â”€â”€ */
 if ($price_min !== null) $price_min = max(0, min(999999, $price_min));
 if ($price_max !== null) $price_max = max(0, min(999999, $price_max));
 if ($min_rating !== null) $min_rating = max(0, min(5, $min_rating));
 
-/* ── Sanitize search: limit length ── */
+/* â”€â”€ Sanitize search: limit length â”€â”€ */
 if (strlen($search) > 200) $search = substr($search, 0, 200);
 
-/* ── Log search for AI (logged-in only) ── */
+/* â”€â”€ Log search for AI (logged-in only, non-fatal) â”€â”€ */
 if ($search && $ai) {
-    $ai->logSearch($me, $search, $cat !== 'all' ? $cat : null, 0);
+    try { $ai->logSearch($me, $search, $cat !== 'all' ? $cat : null, 0); } catch(Throwable $e) {}
 }
 
-/* ── Build WHERE clause ── */
+/* â”€â”€ Build WHERE clause â”€â”€ */
 $where  = "p.is_active=1 AND s.is_active=1";
 $params = [];
 $types  = '';
@@ -83,9 +83,9 @@ $pq = $conn->query(
 );
 $products = $pq ? $pq->fetch_all(MYSQLI_ASSOC) : [];
 
-/* Update AI search result count */
+/* Update AI search result count (non-fatal) */
 if ($search && $ai) {
-    $conn->query("UPDATE product_search_history SET result_count=".count($products)." WHERE user_email='".mysqli_real_escape_string($conn,$me)."' AND query='".mysqli_real_escape_string($conn,$search)."' ORDER BY searched_at DESC LIMIT 1");
+    try { $conn->query("UPDATE product_search_history SET result_count=".count($products)." WHERE user_email='".mysqli_real_escape_string($conn,$me)."' AND query='".mysqli_real_escape_string($conn,$search)."' ORDER BY searched_at DESC LIMIT 1"); } catch(Throwable $e) {}
 }
 
 /* Cart count (logged-in only) */
@@ -104,21 +104,21 @@ $global_min = (int)($prange['mn'] ?? 0);
 $global_max = (int)($prange['mx'] ?? 10000);
 
 $cats = [
-    'handicraft'  => '🎨 Handicraft',
-    'textile'     => '🧵 Textile',
-    'food_product'=> '🍯 Food',
-    'jewelry'     => '💍 Jewelry',
-    'art'         => '🖼️ Art',
-    'pottery'     => '🏺 Pottery',
-    'organic'     => '🌿 Organic',
-    'other'       => '📦 Other',
+    'handicraft'  => 'ðŸŽ¨ Handicraft',
+    'textile'     => 'ðŸ§µ Textile',
+    'food_product'=> 'ðŸ¯ Food',
+    'jewelry'     => 'ðŸ’ Jewelry',
+    'art'         => 'ðŸ–¼ï¸ Art',
+    'pottery'     => 'ðŸº Pottery',
+    'organic'     => 'ðŸŒ¿ Organic',
+    'other'       => 'ðŸ“¦ Other',
 ];
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>SoulServe Shop – Empowering Rural Entrepreneurs</title>
+<title>SoulServe Shop â€“ Empowering Rural Entrepreneurs</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -133,7 +133,7 @@ $cats = [
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent}
 html{scroll-behavior:smooth}
 body{background:linear-gradient(180deg,#f5f8f4 0%,#edf4f1 42%,#f8f3ee 100%);color:var(--text);overflow-x:hidden}
-/* ── HEADER ── */
+/* â”€â”€ HEADER â”€â”€ */
 header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 18px rgba(16,42,67,.07);z-index:200;border-bottom:1px solid rgba(226,235,233,.8)}
 .nav{max-width:1200px;margin:auto;padding:0 20px;height:68px;display:flex;align-items:center;justify-content:space-between;gap:14px}
 .nav-logo img{height:36px;object-fit:contain;display:block}
@@ -146,7 +146,7 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
 .nav-actions a:hover,.nav-actions button:hover{color:var(--teal);background:rgba(0,109,119,.07)}
 .cart-btn{position:relative;background:var(--grad) !important;color:#fff !important;border-radius:10px !important}
 .cart-count{position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center}
-/* ── HERO ── */
+/* â”€â”€ HERO â”€â”€ */
 .page{max-width:1200px;margin:0 auto;padding:24px 20px}
 .shop-hero{background:linear-gradient(135deg,#102A43 0%,#006D77 55%,#2E8B57 100%);border-radius:22px;padding:28px 32px;color:#fff;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;box-shadow:0 20px 56px rgba(16,42,67,.16)}
 .shop-hero h1{font-size:24px;font-weight:900;margin-bottom:6px;letter-spacing:-.3px}
@@ -154,7 +154,7 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
 .hero-stats{display:flex;gap:16px;flex-wrap:wrap}
 .hs{background:rgba(255,255,255,.12);padding:10px 18px;border-radius:12px;text-align:center;border:1px solid rgba(255,255,255,.15)}
 .hs-v{font-size:20px;font-weight:900}.hs-l{font-size:10px;opacity:.85;text-transform:uppercase;letter-spacing:.5px}
-/* ── FILTERS ── */
+/* â”€â”€ FILTERS â”€â”€ */
 .filters-wrap{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px 20px;margin-bottom:20px;border:1px solid var(--border)}
 .filter-row1{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
 .cat-btns{display:flex;gap:7px;flex-wrap:wrap;flex:1}
@@ -174,7 +174,7 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
 .filter-reset{padding:8px 14px;border-radius:8px;background:var(--bg);color:var(--muted);border:1.5px solid var(--border);font-size:13px;font-weight:600;cursor:pointer;transition:.2s;text-decoration:none;display:inline-flex;align-items:center}
 .filter-reset:hover{border-color:var(--teal);color:var(--teal)}
 .results-count{font-size:13px;color:var(--muted);font-weight:600;margin-left:auto}
-/* ── PRODUCTS GRID ── */
+/* â”€â”€ PRODUCTS GRID â”€â”€ */
 .products-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px}
 .prod-card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);transition:.3s;cursor:pointer;border:1px solid rgba(16,42,67,.05);position:relative}
 .prod-card:hover{transform:translateY(-6px);box-shadow:0 20px 52px rgba(16,42,67,.13)}
@@ -194,11 +194,11 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
 .add-cart-btn:hover{transform:translateY(-1px);box-shadow:0 10px 28px rgba(46,139,87,.25)}
 .add-cart-btn.added{background:linear-gradient(135deg,#059669,#10b981)}
 .add-cart-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
-/* ── EMPTY ── */
+/* â”€â”€ EMPTY â”€â”€ */
 .empty{text-align:center;padding:60px 24px;background:rgba(255,255,255,.7);border-radius:20px;box-shadow:var(--shadow)}
 .empty .emoji{font-size:52px;margin-bottom:12px}
 .empty p{color:var(--muted);font-size:14px}
-/* ── GUEST REGISTRATION MODAL ── */
+/* â”€â”€ GUEST REGISTRATION MODAL â”€â”€ */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px)}
 .modal-overlay.open{display:flex}
 .modal-box{background:#fff;border-radius:24px;padding:36px 32px;max-width:440px;width:100%;box-shadow:0 32px 80px rgba(0,0,0,.3);animation:modalIn .3s cubic-bezier(.22,1,.36,1);max-height:92vh;overflow-y:auto}
@@ -225,10 +225,10 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
 .modal-box{position:relative}
 .divider-or{display:flex;align-items:center;gap:10px;margin:16px 0;font-size:12px;font-weight:600;color:var(--muted)}
 .divider-or::before,.divider-or::after{content:'';flex:1;height:1px;background:var(--border)}
-/* ── TOAST ── */
+/* â”€â”€ TOAST â”€â”€ */
 .shop-toast{position:fixed;bottom:24px;right:24px;background:#102A43;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;z-index:9998;transform:translateY(80px);opacity:0;transition:.35s cubic-bezier(.22,1,.36,1);box-shadow:0 18px 42px rgba(16,42,67,.22);max-width:300px;pointer-events:none}
 .shop-toast.show{transform:translateY(0);opacity:1}
-/* ── RESPONSIVE ── */
+/* â”€â”€ RESPONSIVE â”€â”€ */
 @media(max-width:768px){
   .filter-row2{flex-direction:column;align-items:flex-start;gap:10px}
   .filter-group{flex-wrap:wrap}
@@ -256,26 +256,26 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
 </style>
 </head>
 <body>
-<!-- ══ HEADER ══ -->
+<!-- â•â• HEADER â•â• -->
 <header>
   <div class="nav">
     <a href="../index.html" class="nav-logo"><img src="../assets/logo.png" alt="SoulServe"></a>
     <form class="search-bar" method="GET">
       <?php if($cat!=='all'):?><input type="hidden" name="cat" value="<?=htmlspecialchars($cat)?>"> <?php endif;?>
-      <input type="text" name="q" value="<?=htmlspecialchars($search)?>" placeholder="Search handmade products…" autocomplete="off">
-      <button type="submit">🔍</button>
+      <input type="text" name="q" value="<?=htmlspecialchars($search)?>" placeholder="Search handmade productsâ€¦" autocomplete="off">
+      <button type="submit">ðŸ”</button>
     </form>
     <div class="nav-actions">
       <?php if($is_logged_in): ?>
         <a href="../<?=$role?>/<?=$role?>_dashboard.php">Dashboard</a>
-        <a href="my_orders.php">📋 Orders</a>
+        <a href="my_orders.php">ðŸ“‹ Orders</a>
         <a href="cart.php" class="cart-btn">
-          🛒 Cart
+          ðŸ›’ Cart
           <?php if($cart_count>0):?><span class="cart-count"><?=$cart_count?></span><?php endif;?>
         </a>
       <?php else: ?>
         <button onclick="openGuestModal('login')" style="color:var(--teal);border:1.5px solid rgba(0,109,119,.3);border-radius:10px;padding:8px 14px">Sign In</button>
-        <button onclick="openGuestModal('register')" class="cart-btn" style="padding:8px 14px;border-radius:10px">🛒 Cart</button>
+        <button onclick="openGuestModal('register')" class="cart-btn" style="padding:8px 14px;border-radius:10px">ðŸ›’ Cart</button>
       <?php endif; ?>
     </div>
   </div>
@@ -285,7 +285,7 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
   <!-- HERO -->
   <div class="shop-hero">
     <div>
-      <h1>🛍️ SoulServe Shop</h1>
+      <h1>ðŸ›ï¸ SoulServe Shop</h1>
       <p>Every purchase empowers a rural artisan, woman entrepreneur, or local craftsperson. Buy with purpose.</p>
     </div>
     <div class="hero-stats">
@@ -311,37 +311,37 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
         <input type="hidden" name="cat" value="<?=htmlspecialchars($cat)?>">
         <input type="hidden" name="q"   value="<?=htmlspecialchars($search)?>">
         <select name="sort" class="sort-sel" onchange="this.form.submit()">
-          <option value="newest"     <?=$sort==='newest'    ?'selected':''?>>✨ Newest</option>
-          <option value="price_low"  <?=$sort==='price_low' ?'selected':''?>>💰 Price: Low → High</option>
-          <option value="price_high" <?=$sort==='price_high'?'selected':''?>>💎 Price: High → Low</option>
-          <option value="popular"    <?=$sort==='popular'   ?'selected':''?>>🔥 Most Popular</option>
-          <option value="rating"     <?=$sort==='rating'    ?'selected':''?>>⭐ Top Rated</option>
-          <option value="discount"   <?=$sort==='discount'  ?'selected':''?>>🏷️ Best Discount</option>
+          <option value="newest"     <?=$sort==='newest'    ?'selected':''?>>âœ¨ Newest</option>
+          <option value="price_low"  <?=$sort==='price_low' ?'selected':''?>>ðŸ’° Price: Low â†’ High</option>
+          <option value="price_high" <?=$sort==='price_high'?'selected':''?>>ðŸ’Ž Price: High â†’ Low</option>
+          <option value="popular"    <?=$sort==='popular'   ?'selected':''?>>ðŸ”¥ Most Popular</option>
+          <option value="rating"     <?=$sort==='rating'    ?'selected':''?>>â­ Top Rated</option>
+          <option value="discount"   <?=$sort==='discount'  ?'selected':''?>>ðŸ·ï¸ Best Discount</option>
         </select>
       </div>
       <!-- Row 2: Price range + Rating filter -->
       <div class="filter-row2">
         <div class="filter-group">
-          <label>💰 Price</label>
-          <span style="color:var(--muted);font-size:12px">₹</span>
+          <label>ðŸ’° Price</label>
+          <span style="color:var(--muted);font-size:12px">â‚¹</span>
           <input type="number" name="pmin" class="price-input" placeholder="Min"
             value="<?=$price_min!==null?(int)$price_min:''?>" min="0" max="<?=$global_max?>">
-          <span style="color:var(--muted)">—</span>
+          <span style="color:var(--muted)">â€”</span>
           <input type="number" name="pmax" class="price-input" placeholder="Max"
             value="<?=$price_max!==null?(int)$price_max:''?>" min="0" max="<?=$global_max?>">
         </div>
         <div class="filter-group">
-          <label>⭐ Rating</label>
+          <label>â­ Rating</label>
           <select name="rating" class="rating-sel">
             <option value="">Any</option>
             <?php foreach([4.5,4,3.5,3] as $r): ?>
-            <option value="<?=$r?>" <?=$min_rating==$r?'selected':''?>><?=$r?>+ ⭐</option>
+            <option value="<?=$r?>" <?=$min_rating==$r?'selected':''?>><?=$r?>+ â­</option>
             <?php endforeach; ?>
           </select>
         </div>
         <button type="submit" class="filter-apply">Apply Filters</button>
         <?php if($price_min!==null||$price_max!==null||$min_rating!==null||$search||$cat!=='all'): ?>
-        <a href="shop.php" class="filter-reset">✕ Clear</a>
+        <a href="shop.php" class="filter-reset">âœ• Clear</a>
         <?php endif; ?>
         <span class="results-count"><?=count($products)?> result<?=count($products)!=1?'s':''?></span>
       </div>
@@ -351,10 +351,10 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
   <!-- PRODUCTS GRID -->
   <?php if(empty($products)): ?>
   <div class="empty">
-    <div class="emoji">🛍️</div>
+    <div class="emoji">ðŸ›ï¸</div>
     <p><?=$search?"No products found for \"".htmlspecialchars($search)."\".":'No products found. Try different filters.'?></p>
     <?php if($search||$cat!=='all'||$price_min!==null||$price_max!==null): ?>
-    <a href="shop.php" style="display:inline-block;margin-top:14px;color:var(--teal);font-weight:700">Clear filters →</a>
+    <a href="shop.php" style="display:inline-block;margin-top:14px;color:var(--teal);font-weight:700">Clear filters â†’</a>
     <?php endif; ?>
   </div>
   <?php else: ?>
@@ -365,30 +365,30 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
     ?>
     <div class="prod-card" onclick="window.location='product.php?id=<?=(int)$p['id']?>'">
       <?php if($img): ?><img src="<?=htmlspecialchars($img)?>" class="prod-img" alt="<?=htmlspecialchars($p['name'])?>" loading="lazy">
-      <?php else: ?><div class="prod-img-ph">🛍️</div><?php endif; ?>
+      <?php else: ?><div class="prod-img-ph">ðŸ›ï¸</div><?php endif; ?>
       <?php if($disc>0): ?><div style="position:absolute;top:10px;left:10px;background:linear-gradient(135deg,#FF8A00,#F72585);color:#fff;font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px"><?=$disc?>% off</div><?php endif; ?>
       <div class="prod-body">
-        <div class="prod-store">🏪 <?=htmlspecialchars($p['store_name'])?></div>
+        <div class="prod-store">ðŸª <?=htmlspecialchars($p['store_name'])?></div>
         <div class="prod-name"><?=htmlspecialchars($p['name'])?></div>
         <?php if($p['village']||$p['state']): ?>
-        <div class="prod-loc">📍 <?=htmlspecialchars(trim(($p['village']?$p['village'].', ':'').$p['state']))?></div>
+        <div class="prod-loc">ðŸ“ <?=htmlspecialchars(trim(($p['village']?$p['village'].', ':'').$p['state']))?></div>
         <?php endif; ?>
         <div class="prod-price-row">
-          <span class="prod-price">₹<?=number_format($p['price'],0)?></span>
+          <span class="prod-price">â‚¹<?=number_format($p['price'],0)?></span>
           <?php if($p['mrp']>$p['price']): ?>
-          <span class="prod-mrp">₹<?=number_format($p['mrp'],0)?></span>
+          <span class="prod-mrp">â‚¹<?=number_format($p['mrp'],0)?></span>
           <?php endif; ?>
         </div>
         <?php if($p['avg_rating']>0): ?>
-        <div class="prod-rating">⭐ <?=number_format($p['avg_rating'],1)?> · <?=(int)$p['total_sold']?> sold</div>
+        <div class="prod-rating">â­ <?=number_format($p['avg_rating'],1)?> Â· <?=(int)$p['total_sold']?> sold</div>
         <?php endif; ?>
         <?php if($p['stock']>0 && $p['stock']<=5): ?>
-        <div class="prod-stock-low">⚡ Only <?=(int)$p['stock']?> left</div>
+        <div class="prod-stock-low">âš¡ Only <?=(int)$p['stock']?> left</div>
         <?php endif; ?>
         <button class="add-cart-btn" id="btn-<?=(int)$p['id']?>"
           onclick="addToCart(event,<?=(int)$p['id']?>)"
           <?=$p['stock']<=0?'disabled':''?>>
-          <?=$p['stock']<=0?'Out of Stock':'🛒 Add to Cart'?>
+          <?=$p['stock']<=0?'Out of Stock':'ðŸ›’ Add to Cart'?>
         </button>
       </div>
     </div>
@@ -401,7 +401,7 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
 <div style="max-width:1200px;margin:32px auto 0;padding:0 20px 40px">
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:3px">🤖 Recommended For You</h2>
+      <h2 style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:3px">ðŸ¤– Recommended For You</h2>
       <p style="font-size:12px;color:var(--muted)">AI-personalised based on your browsing history</p>
     </div>
   </div>
@@ -412,18 +412,18 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
     ?>
     <div class="prod-card" onclick="window.location='product.php?id=<?=(int)$p['id']?>'">
       <?php if($img): ?><img src="<?=htmlspecialchars($img)?>" class="prod-img" alt="" loading="lazy">
-      <?php else: ?><div class="prod-img-ph">🛍️</div><?php endif; ?>
-      <div style="position:absolute;top:10px;left:10px;background:rgba(0,109,119,.9);color:#fff;font-size:9px;font-weight:800;padding:3px 8px;border-radius:20px;letter-spacing:.3px">🤖 AI PICK</div>
+      <?php else: ?><div class="prod-img-ph">ðŸ›ï¸</div><?php endif; ?>
+      <div style="position:absolute;top:10px;left:10px;background:rgba(0,109,119,.9);color:#fff;font-size:9px;font-weight:800;padding:3px 8px;border-radius:20px;letter-spacing:.3px">ðŸ¤– AI PICK</div>
       <div class="prod-body">
-        <div class="prod-store">🏪 <?=htmlspecialchars($p['store_name'])?></div>
+        <div class="prod-store">ðŸª <?=htmlspecialchars($p['store_name'])?></div>
         <div class="prod-name"><?=htmlspecialchars($p['name'])?></div>
         <div class="prod-price-row">
-          <span class="prod-price">₹<?=number_format($p['price'],0)?></span>
-          <?php if($p['mrp']>$p['price']): ?><span class="prod-mrp">₹<?=number_format($p['mrp'],0)?></span><?php endif; ?>
+          <span class="prod-price">â‚¹<?=number_format($p['price'],0)?></span>
+          <?php if($p['mrp']>$p['price']): ?><span class="prod-mrp">â‚¹<?=number_format($p['mrp'],0)?></span><?php endif; ?>
         </div>
-        <?php if($p['avg_rating']>0): ?><div class="prod-rating">⭐ <?=number_format($p['avg_rating'],1)?></div><?php endif; ?>
-        <button class="add-cart-btn" id="btn-r-<?=(int)$p['id']?>" onclick="addToCart(event,<?=(int)$p['id']?>)" <?=$p['stock']<=0?'disabled':'?'?>>
-          <?=$p['stock']<=0?'Out of Stock':'🛒 Add to Cart'?>
+        <?php if($p['avg_rating']>0): ?><div class="prod-rating">â­ <?=number_format($p['avg_rating'],1)?></div><?php endif; ?>
+        <button class="add-cart-btn" id="btn-r-<?=(int)$p['id']?>" onclick="addToCart(event,<?=(int)$p['id']?>)" <?=$p['stock']<=0?'disabled':''?>>
+          <?=$p['stock']<=0?'Out of Stock':'ðŸ›’ Add to Cart'?>
         </button>
       </div>
     </div>
@@ -432,10 +432,10 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
 </div>
 <?php endif; ?>
 
-<!-- ══ GUEST REGISTRATION / LOGIN MODAL ══ -->
+<!-- â•â• GUEST REGISTRATION / LOGIN MODAL â•â• -->
 <div class="modal-overlay" id="guestModal">
   <div class="modal-box">
-    <button class="modal-close" onclick="closeGuestModal()">✕</button>
+    <button class="modal-close" onclick="closeGuestModal()">âœ•</button>
     <div class="modal-logo"><img src="../assets/logo.png" alt="SoulServe"></div>
     <div class="modal-title">Join SoulServe</div>
     <p class="modal-sub">Create a free account to add items to your cart, track orders and support rural artisans.</p>
@@ -457,7 +457,7 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
         <input class="mf-input" type="password" id="reg-pwd" placeholder="Min. 6 characters" autocomplete="new-password" required></div>
       <div class="mf-group"><label class="mf-label">Phone (optional)</label>
         <input class="mf-input" type="tel" id="reg-phone" placeholder="+91 98765 43210" autocomplete="tel"></div>
-      <button class="mf-btn" id="reg-btn" onclick="submitRegister()">Create Account & Continue Shopping →</button>
+      <button class="mf-btn" id="reg-btn" onclick="submitRegister()">Create Account & Continue Shopping â†’</button>
       <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6">By registering you agree to our Terms of Service. Your account lets you track orders, earn badges and get personalised recommendations.</p>
     </div>
 
@@ -469,7 +469,7 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
         <input class="mf-input" type="email" id="login-email" placeholder="you@email.com" autocomplete="email"></div>
       <div class="mf-group"><label class="mf-label">Password</label>
         <input class="mf-input" type="password" id="login-pwd" placeholder="Your password" autocomplete="current-password"></div>
-      <button class="mf-btn" id="login-btn" onclick="submitLogin()">Sign In & Continue Shopping →</button>
+      <button class="mf-btn" id="login-btn" onclick="submitLogin()">Sign In & Continue Shopping â†’</button>
       <div class="divider-or">or</div>
       <a href="../auth/google_login.php" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;font-weight:600;color:var(--navy);text-decoration:none;transition:.2s" onmouseover="this.style.borderColor='#4285F4'" onmouseout="this.style.borderColor='var(--border)'">
         <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
@@ -490,7 +490,7 @@ const CSRF = '<?=csrf_token()?>';
 const CSRF = '';
 <?php endif; ?>
 
-/* ── Add to cart ── */
+/* â”€â”€ Add to cart â”€â”€ */
 function addToCart(e, pid) {
   e.stopPropagation();
   if (!IS_LOGGED_IN) {
@@ -498,7 +498,7 @@ function addToCart(e, pid) {
     return;
   }
   const btns = document.querySelectorAll('#btn-'+pid+',#btn-r-'+pid);
-  btns.forEach(b=>{ b.textContent='⏳ Adding…'; b.disabled=true; });
+  btns.forEach(b=>{ b.textContent='â³ Addingâ€¦'; b.disabled=true; });
   fetch('../api/cart_action.php', {
     method:'POST',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
@@ -509,20 +509,20 @@ function addToCart(e, pid) {
     if (d.needs_login) { openGuestModal('register'); return; }
     btns.forEach(b=>{ b.disabled=false; });
     if (d.success) {
-      btns.forEach(b=>{ b.textContent='✅ Added!'; b.classList.add('added'); });
-      setTimeout(()=>btns.forEach(b=>{ b.textContent='🛒 Add to Cart'; b.classList.remove('added'); }),2200);
-      showToast('Added to cart! 🛒');
+      btns.forEach(b=>{ b.textContent='âœ… Added!'; b.classList.add('added'); });
+      setTimeout(()=>btns.forEach(b=>{ b.textContent='ðŸ›’ Add to Cart'; b.classList.remove('added'); }),2200);
+      showToast('Added to cart! ðŸ›’');
       /* update cart badge */
       document.querySelectorAll('.cart-count').forEach(el=>el.textContent=d.cart_count);
     } else {
-      btns.forEach(b=>{ b.textContent='🛒 Add to Cart'; });
+      btns.forEach(b=>{ b.textContent='ðŸ›’ Add to Cart'; });
       showToast(d.message || 'Could not add to cart');
     }
   })
-  .catch(()=>btns.forEach(b=>{ b.textContent='🛒 Add to Cart'; b.disabled=false; }));
+  .catch(()=>btns.forEach(b=>{ b.textContent='ðŸ›’ Add to Cart'; b.disabled=false; }));
 }
 
-/* ── Modal ── */
+/* â”€â”€ Modal â”€â”€ */
 let _pendingPid = null;
 function openGuestModal(tab) {
   switchModalTab(tab || 'register');
@@ -543,7 +543,7 @@ function switchModalTab(tab) {
   document.getElementById('tab-login').classList.toggle('active', tab==='login');
 }
 
-/* ── Register ── */
+/* â”€â”€ Register â”€â”€ */
 function submitRegister() {
   const name  = document.getElementById('reg-name').value.trim();
   const email = document.getElementById('reg-email').value.trim();
@@ -557,7 +557,7 @@ function submitRegister() {
   if (pwd.length<6){ errEl.textContent='Password must be at least 6 characters.'; errEl.style.display='block'; return; }
 
   const btn = document.getElementById('reg-btn');
-  btn.disabled=true; btn.textContent='Creating account…';
+  btn.disabled=true; btn.textContent='Creating accountâ€¦';
 
   fetch('../api/register_customer.php',{
     method:'POST',
@@ -566,7 +566,7 @@ function submitRegister() {
   })
   .then(r=>r.json())
   .then(d=>{
-    btn.disabled=false; btn.textContent='Create Account & Continue Shopping →';
+    btn.disabled=false; btn.textContent='Create Account & Continue Shopping â†’';
     if(d.ok){
       sucEl.textContent=d.message; sucEl.style.display='block';
       setTimeout(()=>location.reload(),1200);
@@ -574,11 +574,11 @@ function submitRegister() {
       errEl.textContent=d.message; errEl.style.display='block';
     }
   })
-  .catch(()=>{ btn.disabled=false; btn.textContent='Create Account & Continue Shopping →'; errEl.textContent='Network error. Please try again.'; errEl.style.display='block'; });
+  .catch(()=>{ btn.disabled=false; btn.textContent='Create Account & Continue Shopping â†’'; errEl.textContent='Network error. Please try again.'; errEl.style.display='block'; });
 }
 document.getElementById('reg-pwd').addEventListener('keydown',e=>{ if(e.key==='Enter') submitRegister(); });
 
-/* ── Login (uses existing login endpoint) ── */
+/* â”€â”€ Login (uses existing login endpoint) â”€â”€ */
 function submitLogin() {
   const email = document.getElementById('login-email').value.trim();
   const pwd   = document.getElementById('login-pwd').value;
@@ -588,9 +588,9 @@ function submitLogin() {
   if(!email||!pwd){ errEl.textContent='Please enter email and password.'; errEl.style.display='block'; return; }
 
   const btn = document.getElementById('login-btn');
-  btn.disabled=true; btn.textContent='Signing in…';
+  btn.disabled=true; btn.textContent='Signing inâ€¦';
 
-  /* Use register_customer.php with existing credentials — it auto-logins on correct password */
+  /* Use register_customer.php with existing credentials â€” it auto-logins on correct password */
   fetch('../api/register_customer.php',{
     method:'POST',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
@@ -598,7 +598,7 @@ function submitLogin() {
   })
   .then(r=>r.json())
   .then(d=>{
-    btn.disabled=false; btn.textContent='Sign In & Continue Shopping →';
+    btn.disabled=false; btn.textContent='Sign In & Continue Shopping â†’';
     if(d.ok){
       sucEl.textContent=d.message||'Signed in!'; sucEl.style.display='block';
       setTimeout(()=>location.reload(),1000);
@@ -614,268 +614,11 @@ function submitLogin() {
 }
 document.getElementById('login-pwd').addEventListener('keydown',e=>{ if(e.key==='Enter') submitLogin(); });
 
-/* ── Toast ── */
+/* â”€â”€ Toast â”€â”€ */
 function showToast(msg) {
   const t = document.getElementById('shopToast');
   t.textContent=msg; t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),3200);
-}
-</script>
-<script src="../js/script.js"></script>
-</body>
-</html>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-:root{
-  --navy:#102A43; --teal:#006D77; --teal-dark:#004F55; --teal-light:#83C5BE;
-  --green:#2E8B57; --orange:#FF8A00; --pink:#F72585; --purple:#7B2CBF;
-  --blue:#2563EB; --cyan:#06B6D4; --white:#FFFFFF; --bg:#F7FAF9; --card:#FFFFFF;
-  --border:#E2EBE9; --text:#102A43; --muted:#5A7184; --text-light:#94A3B8;
-  --shadow:0 18px 48px rgba(16,42,67,.12); --radius:18px; --radius-sm:10px;
-  --accent:var(--teal); --accent2:var(--green);
-}
-*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif}
-html{scroll-behavior:smooth}
-body{background:linear-gradient(180deg,#f5f8f4 0%,#edf4f1 42%,#f8f3ee 100%);color:var(--text);line-height:1.6;position:relative}
-body::before,
-body::after{content:'';position:fixed;pointer-events:none;z-index:0;border-radius:50%;filter:blur(12px)}
-body::before{width:440px;height:440px;left:-140px;top:-120px;background:radial-gradient(circle, rgba(0,109,119,.14), rgba(0,109,119,0));}
-body::after{width:360px;height:360px;right:-120px;bottom:-120px;background:radial-gradient(circle, rgba(247,37,133,.10), rgba(247,37,133,0));}
-header{position:sticky;top:0;background:rgba(255,255,255,.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 2px 18px rgba(16,42,67,.07);z-index:100;border-bottom:1px solid rgba(226,235,233,.8)}
-.nav{max-width:1200px;margin:auto;padding:0 20px;height:68px;display:flex;align-items:center;justify-content:space-between;gap:16px;position:relative;z-index:1}
-.logo{font-size:18px;font-weight:900;color:var(--teal);text-decoration:none;white-space:nowrap;letter-spacing:-.3px}
-.search-bar{flex:1;max-width:420px;display:flex;gap:0}
-.search-bar input{flex:1;padding:12px 16px;border:1.5px solid var(--border);border-right:none;border-radius:10px 0 0 10px;font-size:14px;outline:none;background:#fafaf6;color:var(--text)}
-.search-bar input:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,109,119,.08)}
-.search-bar button{padding:0 16px;background:linear-gradient(135deg,var(--teal),var(--green));color:#fff;border:none;border-radius:0 10px 10px 0;cursor:pointer;font-weight:700;box-shadow:0 8px 20px rgba(0,109,119,.18)}
-.nav-links{display:flex;align-items:center;gap:12px}
-.nav-links a{text-decoration:none;font-size:13px;font-weight:700;color:var(--muted);padding:8px 12px;border-radius:10px;transition:.2s}
-.nav-links a:hover{color:var(--teal);background:rgba(0,109,119,.06)}
-.cart-btn{position:relative;background:linear-gradient(135deg,var(--teal),var(--green));color:#fff !important;padding:8px 16px !important;border-radius:10px !important;box-shadow:0 8px 24px rgba(0,109,119,.2)}
-.cart-count{position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center}
-.page{max-width:1200px;margin:0 auto;padding:24px 20px;position:relative;z-index:1}
-.shop-hero{background:linear-gradient(135deg,#102A43 0%,#006D77 60%,#2E8B57 100%);border-radius:22px;padding:32px 36px;color:#fff;margin-bottom:28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;box-shadow:0 20px 56px rgba(16,42,67,.18)}
-.shop-hero h1{font-size:26px;font-weight:900;margin-bottom:6px;letter-spacing:-.4px}
-.shop-hero p{font-size:14px;opacity:.92;max-width:500px}
-.hero-stats{display:flex;gap:20px;flex-wrap:wrap}
-.hero-stat{background:rgba(255,255,255,.12);padding:10px 18px;border-radius:12px;text-align:center;border:1px solid rgba(255,255,255,.12)}
-.hero-stat .hs-v{font-size:20px;font-weight:800}
-.hero-stat .hs-l{font-size:11px;opacity:.9;text-transform:uppercase;letter-spacing:.5px}
-.filter-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:24px}
-.filter-cats{display:flex;gap:8px;flex-wrap:wrap;flex:1}
-.cat-btn{padding:8px 16px;border-radius:20px;border:1.5px solid var(--border);background:#fff;font-size:13px;font-weight:700;cursor:pointer;transition:.2s;text-decoration:none;color:var(--muted)}
-.cat-btn:hover,.cat-btn.active{background:linear-gradient(135deg,var(--teal),var(--green));color:#fff;border-color:transparent;box-shadow:0 8px 24px rgba(0,109,119,.18)}
-.sort-select{padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;color:var(--text);background:#fff;outline:none;cursor:pointer}
-.sort-select:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,109,119,.08)}
-.products-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:20px}
-.prod-card{background:var(--card);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);transition:.3s;cursor:pointer;border:1px solid rgba(16,42,67,.05);position:relative}
-.prod-card:hover{transform:translateY(-6px);box-shadow:0 24px 58px rgba(16,42,67,.13)}
-.prod-img{width:100%;height:180px;object-fit:cover;background:#f0ede5;display:block}
-.prod-img-ph{width:100%;height:180px;background:linear-gradient(135deg,#edf3f0,#e5e4dd);display:flex;align-items:center;justify-content:center;font-size:42px}
-.prod-body{padding:14px}
-.prod-store{font-size:11px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:4px}
-.prod-name{font-size:15px;font-weight:800;margin-bottom:6px;line-height:1.35;color:var(--text)}
-.prod-loc{font-size:11px;color:var(--muted);margin-bottom:8px}
-.prod-price-row{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-.prod-price{font-size:18px;font-weight:900;color:var(--teal)}
-.prod-mrp{font-size:12px;color:var(--muted);text-decoration:line-through}
-.prod-discount{font-size:11px;background:#d1fae5;color:#065f46;padding:2px 7px;border-radius:6px;font-weight:800}
-.prod-rating{font-size:12px;color:var(--muted);margin-bottom:10px}
-.add-cart-btn{width:100%;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,var(--teal),var(--green));color:#fff;font-size:13px;font-weight:800;cursor:pointer;transition:.25s;box-shadow:0 8px 20px rgba(0,109,119,.16)}
-.add-cart-btn:hover{transform:translateY(-1px);box-shadow:0 10px 30px rgba(46,139,87,.28)}
-.add-cart-btn.added{background:linear-gradient(135deg,#059669,#10b981)}
-.empty{text-align:center;padding:64px 24px;background:rgba(255,255,255,.7);border-radius:20px;box-shadow:var(--shadow);border:1px solid rgba(16,42,67,.05)}
-.empty .emoji{font-size:52px;margin-bottom:14px}
-.empty p{color:var(--muted);font-size:14px}
-.toast{position:fixed;bottom:24px;right:24px;background:#102A43;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;z-index:9999;transform:translateY(80px);opacity:0;transition:.35s;box-shadow:0 18px 42px rgba(16,42,67,.22)}
-.toast.show{transform:translateY(0);opacity:1}
-@media(max-width:700px){.search-bar{max-width:none;order:3;width:100%}.nav{flex-wrap:wrap;height:auto;padding:12px 16px;gap:8px}.shop-hero{padding:20px}.prod-img,.prod-img-ph{height:150px}}
-</style>
-</head>
-<body>
-<header>
-  <div class="nav">
-    <a href="../index.html" class="logo"><img src="../assets/logo.png" alt="SoulServe" style="height:36px;object-fit:contain;vertical-align:middle"></a>
-    <form class="search-bar" method="GET">
-      <input type="text" name="q" value="<?=htmlspecialchars($search)?>" placeholder="Search handmade products...">
-      <button type="submit">🔍</button>
-    </form>
-    <div class="nav-links">
-      <a href="../<?=$role?>/<?=$role?>_dashboard.php">Dashboard</a>
-      <a href="my_orders.php">📋 Orders</a>
-      <a href="cart.php" class="cart-btn">
-        🛒 Cart
-        <?php if($cart_count>0): ?><span class="cart-count"><?=$cart_count?></span><?php endif; ?>
-      </a>
-    </div>
-  </div>
-</header>
-
-<div class="page">
-  <div class="shop-hero">
-    <div>
-      <h1>🛍️ Adhaar Shop</h1>
-      <p>Every purchase empowers a rural artisan, woman entrepreneur, or local craftsperson. Buy with purpose.</p>
-    </div>
-    <div class="hero-stats">
-      <div class="hero-stat">
-        <div class="hs-v"><?=count($products)?></div>
-        <div class="hs-l">Products</div>
-      </div>
-      <div class="hero-stat">
-        <div class="hs-v"><?=(int)$conn->query("SELECT COUNT(*) c FROM seller_stores WHERE is_active=1")->fetch_assoc()['c']?></div>
-        <div class="hs-l">Sellers</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="filter-bar">
-    <div class="filter-cats">
-      <a href="?cat=all&sort=<?=$sort?>" class="cat-btn <?=$cat==='all'?'active':''?>">All</a>
-      <?php foreach($cats as $v=>$l): ?>
-      <a href="?cat=<?=$v?>&sort=<?=$sort?>" class="cat-btn <?=$cat===$v?'active':''?>"><?=$l?></a>
-      <?php endforeach; ?>
-    </div>
-    <form method="GET" style="display:flex;gap:8px;align-items:center">
-      <input type="hidden" name="cat" value="<?=htmlspecialchars($cat)?>">
-      <input type="hidden" name="q" value="<?=htmlspecialchars($search)?>">
-      <select name="sort" class="sort-select" onchange="this.form.submit()">
-        <option value="newest" <?=$sort==='newest'?'selected':''?>>Newest</option>
-        <option value="price_low" <?=$sort==='price_low'?'selected':''?>>Price: Low → High</option>
-        <option value="price_high" <?=$sort==='price_high'?'selected':''?>>Price: High → Low</option>
-        <option value="popular" <?=$sort==='popular'?'selected':''?>>Most Popular</option>
-        <option value="rating" <?=$sort==='rating'?'selected':''?>>Top Rated</option>
-      </select>
-    </form>
-  </div>
-
-  <?php if(empty($products)): ?>
-  <div class="empty">
-    <div class="emoji">🛍️</div>
-    <p>No products found. <?=$search?'Try a different search.':'Check back soon!'?></p>
-  </div>
-  <?php else: ?>
-  <div class="products-grid">
-    <?php foreach($products as $p):
-      $img = !empty($p['image1']) ? image_url($p['image1']) : null;
-      $discount = ($p['mrp'] && $p['mrp']>$p['price']) ? round((($p['mrp']-$p['price'])/$p['mrp'])*100) : 0;
-    ?>
-    <div class="prod-card" onclick="window.location='product.php?id=<?=(int)$p['id']?>'">
-      <?php if($img): ?><img src="<?=htmlspecialchars($img)?>" class="prod-img" alt="<?=htmlspecialchars($p['name'])?>">
-      <?php else: ?><div class="prod-img-ph">🛍️</div><?php endif; ?>
-      <div class="prod-body">
-        <div class="prod-store">🏪 <?=htmlspecialchars($p['store_name'])?></div>
-        <div class="prod-name"><?=htmlspecialchars($p['name'])?></div>
-        <?php if($p['village']||$p['state']): ?>
-        <div class="prod-loc">📍 <?=htmlspecialchars(trim(($p['village']?$p['village'].', ':'').$p['state']))?></div>
-        <?php endif; ?>
-        <div class="prod-price-row">
-          <span class="prod-price">₹<?=number_format($p['price'],2)?></span>
-          <?php if($p['mrp']>$p['price']): ?>
-          <span class="prod-mrp">₹<?=number_format($p['mrp'],2)?></span>
-          <span class="prod-discount"><?=$discount?>% off</span>
-          <?php endif; ?>
-        </div>
-        <?php if($p['avg_rating']>0): ?>
-        <div class="prod-rating">⭐ <?=number_format($p['avg_rating'],1)?> · <?=(int)$p['total_sold']?> sold</div>
-        <?php endif; ?>
-        <button class="add-cart-btn" id="btn-<?=(int)$p['id']?>" onclick="addToCart(event,<?=(int)$p['id']?>)" <?=$p['stock']<=0?'disabled style="opacity:.5;cursor:not-allowed"':''?>>
-          <?=$p['stock']<=0?'Out of Stock':'🛒 Add to Cart'?>
-        </button>
-      </div>
-    </div>
-    <?php endforeach; ?>
-  </div>
-  <?php endif; ?>
-</div>
-
-<?php if($show_ai_recs): ?>
-<!-- ══ AI RECOMMENDED FOR YOU ══ -->
-<div style="margin-top:40px;margin-bottom:12px">
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:18px">
-    <div>
-      <h2 style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:4px">🤖 Recommended For You</h2>
-      <p style="font-size:13px;color:var(--muted)">AI-personalised picks based on your browsing &amp; purchase history</p>
-    </div>
-    <span style="font-size:11px;background:#f0ede5;padding:5px 12px;border-radius:20px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:5px">
-      🤖 AI Powered &nbsp; · &nbsp; <?=count($ai_recs)?> picks
-    </span>
-  </div>
-  <div class="products-grid">
-    <?php foreach($ai_recs as $p):
-      $img = !empty($p['image1']) ? image_url($p['image1']) : null;
-      $discount = ($p['mrp'] && $p['mrp']>$p['price']) ? round((($p['mrp']-$p['price'])/$p['mrp'])*100) : 0;
-      $score = $p['_rec_score'] ?? 0;
-    ?>
-    <div class="prod-card" onclick="window.location='product.php?id=<?=(int)$p['id']?>'">
-      <?php if($img): ?><img src="<?=htmlspecialchars($img)?>" class="prod-img" alt="<?=htmlspecialchars($p['name'])?>">
-      <?php else: ?><div class="prod-img-ph">🛍️</div><?php endif; ?>
-      <!-- AI relevance badge -->
-      <div style="position:absolute;top:10px;left:10px;background:rgba(122,125,63,.92);color:#fff;font-size:9px;font-weight:800;padding:3px 8px;border-radius:20px;letter-spacing:.5px">🤖 AI PICK</div>
-      <div class="prod-body">
-        <div class="prod-store">🏪 <?=htmlspecialchars($p['store_name'])?></div>
-        <div class="prod-name"><?=htmlspecialchars($p['name'])?></div>
-        <?php if($p['village']||$p['state']): ?>
-        <div class="prod-loc">📍 <?=htmlspecialchars(trim(($p['village']?$p['village'].', ':'').$p['state']))?></div>
-        <?php endif; ?>
-        <div class="prod-price-row">
-          <span class="prod-price">₹<?=number_format($p['price'],2)?></span>
-          <?php if($p['mrp']>$p['price']): ?>
-          <span class="prod-mrp">₹<?=number_format($p['mrp'],2)?></span>
-          <span class="prod-discount"><?=$discount?>% off</span>
-          <?php endif; ?>
-        </div>
-        <?php if($p['avg_rating']>0): ?>
-        <div class="prod-rating">⭐ <?=number_format($p['avg_rating'],1)?> · <?=(int)$p['total_sold']?> sold</div>
-        <?php endif; ?>
-        <button class="add-cart-btn" id="btn-rec-<?=(int)$p['id']?>" onclick="addToCart(event,<?=(int)$p['id']?>)" <?=$p['stock']<=0?'disabled style="opacity:.5;cursor:not-allowed"':''?>>
-          <?=$p['stock']<=0?'Out of Stock':'🛒 Add to Cart'?>
-        </button>
-      </div>
-    </div>
-    <?php endforeach; ?>
-  </div>
-</div>
-<?php endif; ?>
-
-<div id="toast" class="toast"></div>
-
-<script>
-function addToCart(e, pid) {
-  e.stopPropagation();
-  const btn = document.getElementById('btn-'+pid);
-  fetch('../api/cart_action.php', {
-    method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body:'action=add&product_id='+pid+'&csrf_token='+encodeURIComponent('<?=csrf_token()?>')
-  })
-  .then(r=>r.json())
-  .then(d=>{
-    if(d.success){
-      btn.textContent='✅ Added!';
-      btn.classList.add('added');
-      setTimeout(()=>{btn.textContent='🛒 Add to Cart';btn.classList.remove('added');},2000);
-      showToast('Added to cart! 🛒');
-      // Update cart count in header
-      document.querySelectorAll('.cart-count').forEach(el=>el.textContent=d.cart_count);
-      if(d.cart_count>0 && !document.querySelector('.cart-count')){
-        const cb=document.querySelector('.cart-btn');
-        const span=document.createElement('span');
-        span.className='cart-count';span.textContent=d.cart_count;
-        cb.appendChild(span);
-      }
-    } else {
-      showToast(d.message || 'Could not add to cart');
-    }
-  });
-}
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 3000);
 }
 </script>
 <script src="../js/script.js"></script>
