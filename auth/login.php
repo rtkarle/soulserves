@@ -6,7 +6,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
 
     $email = trim($_POST['email'] ?? '');
-    $pass  = trim($_POST['password'] ?? '');
+    $pass  = $_POST['password'] ?? '';   /* NEVER trim passwords — spaces are valid */
     $ip    = $_SERVER['REMOTE_ADDR'] ?? '';
 
     if (!$email || !$pass) { header("Location: login.php?error=1"); exit; }

@@ -81,7 +81,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
 
 <div class="page">
   <div class="page-title">📍 Track Your Donations</div>
-  <div class="page-sub">Real-time status of all your food and clothing donations. Page auto-refreshes every 30 seconds.</div>
+  <div class="page-sub">Real-time status of all your food and clothing donations — updates instantly via live stream.</div>
 
 <?php
 $steps=['submitted','accepted','scheduled','out_for_pickup','picked_up'];
@@ -125,19 +125,142 @@ function renderCard($row,$type,$steps,$step_labels){
 
 <div class="section-head">🍲 Food Donations</div>
 <?php if($food_res->num_rows>0): ?>
+  <div id="food-grid">
   <?php while($row=$food_res->fetch_assoc()): renderCard($row,'food',$steps,$step_labels); endwhile; ?>
-<?php else: ?><div class="empty"><span class="emoji">📭</span><p>No food donations yet. <a href="donate.php" style="color:var(--accent);font-weight:700">Donate now →</a></p></div><?php endif; ?>
+  </div>
+<?php else: ?>
+  <div id="food-grid"></div>
+  <div id="empty-food" class="empty"><span class="emoji">📭</span><p>No food donations yet. <a href="donate.php" style="color:var(--accent);font-weight:700">Donate now →</a></p></div>
+<?php endif; ?>
 
 <div class="section-head">👕 Clothing Donations</div>
 <?php if($cloth_res->num_rows>0): ?>
+  <div id="cloth-grid">
   <?php while($row=$cloth_res->fetch_assoc()): renderCard($row,'cloth',$steps,$step_labels); endwhile; ?>
-<?php else: ?><div class="empty"><span class="emoji">📭</span><p>No clothing donations yet. <a href="donate.php" style="color:var(--accent);font-weight:700">Donate now →</a></p></div><?php endif; ?>
+  </div>
+<?php else: ?>
+  <div id="cloth-grid"></div>
+  <div id="empty-cloth" class="empty"><span class="emoji">📭</span><p>No clothing donations yet. <a href="donate.php" style="color:var(--accent);font-weight:700">Donate now →</a></p></div>
+<?php endif; ?>
 
-<p class="auto-refresh" id="refreshMsg">Auto-refreshing in <span id="countdown">30</span>s</p>
+<p class="auto-refresh" id="refreshMsg">🔴 <span id="sseStatus">Connecting to live stream…</span></p>
 </div>
 <script>
-let t=30;const el=document.getElementById('countdown');
-setInterval(()=>{t--;if(t<=0){location.reload();}if(el)el.textContent=t;},1000);
+/* ── SSE real-time status updates ── */
+(function(){
+  const STEPS = ['submitted','accepted','scheduled','out_for_pickup','picked_up'];
+  const STEP_LABELS = ['Submitted','Accepted','Scheduled','Out for Pickup','Picked Up'];
+
+  function badgeClass(s){
+    const map={pending:'pending',submitted:'submitted',accepted:'accepted',
+               scheduled:'scheduled',out_for_pickup:'out_for_pickup',
+               picked_up:'picked_up',delivered:'delivered',rejected:'rejected'};
+    return map[s]||'pending';
+  }
+  function statusLabel(s){ return s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
+
+  function buildCard(d){
+    const idx   = STEPS.indexOf(d.status);
+    const cur   = idx === -1 ? 0 : idx;
+    const width = Math.round(((cur+1)/STEPS.length)*100);
+    const icon  = d.type==='food'?'🍱':'👕';
+    const isActive = (d.status!=='delivered'&&d.status!=='rejected');
+
+    const tlHTML = STEPS.map((s,i)=>{
+      const done   = i<=cur;
+      const active = i===cur && isActive;
+      const line   = i<STEPS.length-1
+        ? `<div class="tl-line ${i<cur?'done':''}"></div>` : '';
+      return `<div class="tl-step ${done?'done':''} ${active?'active-step':''}">
+        <div class="tl-dot"></div><span>${STEP_LABELS[i]}</span></div>${line}`;
+    }).join('');
+
+    const pickupRow = d.pickup_date
+      ? `<div class="tc-row"><span>Pickup:</span><strong>${d.pickup_date} ${d.pickup_time||''}</strong></div>` : '';
+    const volRow = d.volunteer_email
+      ? `<div class="tc-row"><span>Volunteer:</span><strong>${d.volunteer_email}</strong></div>` : '';
+
+    return `<div class="track-card" data-don="${d.don_id}"
+              style="${d.status==='rejected'?'border-left-color:#ef4444':''}">
+      <div class="tc-header">
+        <div class="tc-id">${icon} <span style="font-family:monospace;font-size:12px;
+          background:rgba(122,125,63,.1);padding:2px 8px;border-radius:12px">${d.don_id}</span></div>
+        <span class="badge ${badgeClass(d.status)}">${statusLabel(d.status)}</span>
+      </div>
+      <div class="tc-row"><span>Quantity:</span><strong>${d.quantity||'—'}</strong></div>
+      <div class="tc-row"><span>Address:</span><span style="text-align:right;max-width:280px">${d.pickup_address||'—'}</span></div>
+      ${pickupRow}${volRow}
+      <div class="prog-wrap">
+        <div class="prog-track"><div class="prog-fill" style="width:${width}%"></div></div>
+      </div>
+      <div class="tl">${tlHTML}</div>
+    </div>`;
+  }
+
+  function renderAll(donations){
+    const food  = donations.filter(d=>d.type==='food');
+    const cloth = donations.filter(d=>d.type==='cloth');
+    const emptyFood  = document.getElementById('empty-food');
+    const emptyCloth = document.getElementById('empty-cloth');
+    const foodGrid   = document.getElementById('food-grid');
+    const clothGrid  = document.getElementById('cloth-grid');
+
+    if(foodGrid){
+      if(food.length){
+        foodGrid.innerHTML  = food.map(buildCard).join('');
+        if(emptyFood) emptyFood.style.display='none';
+      } else {
+        foodGrid.innerHTML='';
+        if(emptyFood) emptyFood.style.display='';
+      }
+    }
+    if(clothGrid){
+      if(cloth.length){
+        clothGrid.innerHTML = cloth.map(buildCard).join('');
+        if(emptyCloth) emptyCloth.style.display='none';
+      } else {
+        clothGrid.innerHTML='';
+        if(emptyCloth) emptyCloth.style.display='';
+      }
+    }
+  }
+
+  const statusEl = document.getElementById('sseStatus');
+  function setStatus(msg, color){
+    if(statusEl){ statusEl.textContent=msg; statusEl.style.color=color||''; }
+  }
+
+  function connect(){
+    if(!window.EventSource){ setStatus('Live updates not supported — reload to refresh.','#ef4444'); return; }
+
+    const es = new EventSource('../api/donation_status_stream.php');
+
+    es.addEventListener('status', e=>{
+      try{
+        const data = JSON.parse(e.data);
+        renderAll(data.donations||[]);
+        setStatus('Live — last updated ' + new Date().toLocaleTimeString(), '#065f46');
+      }catch(_){}
+    });
+
+    es.addEventListener('ping', ()=>{
+      setStatus('Live — ' + new Date().toLocaleTimeString(), '#065f46');
+    });
+
+    es.addEventListener('close', ()=>{
+      es.close();
+      setTimeout(connect, 3000);   // server closed gracefully — reconnect
+    });
+
+    es.onerror = ()=>{
+      setStatus('Reconnecting…', '#92400e');
+      es.close();
+      setTimeout(connect, 5000);
+    };
+  }
+
+  connect();
+})();
 </script>
 </body>
 </html>

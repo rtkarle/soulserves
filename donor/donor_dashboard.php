@@ -61,22 +61,23 @@ $me          = mysqli_real_escape_string($conn,$email);
 $cart_count  = sc2($conn,"SELECT COUNT(*) c FROM cart WHERE user_email='$me'");
 $order_count = sc2($conn,"SELECT COUNT(*) c FROM orders WHERE buyer_email='$me'");
 
-/* ── AI Engine calls ── */
+/* ── AI Engine calls — session-cached (5-min TTL) ── */
 $ai = adhaar_ai();
 $ai_suggestions  = []; $ai_products = []; $ai_impact = [];
 $ai_causes       = []; $ai_report   = []; $ai_alerts  = [];
 $ai_recurring    = []; $ai_badges   = []; $ai_need    = [];
 try {
-  $ai_suggestions = $ai->getDonorSuggestions($email) ?: [];
-  $ai_products    = $ai->getProductRecommendations($email,0,4) ?: [];
-  $ai_impact      = $ai->predictImpact() ?: [];
-  $ai_causes      = $ai->getPersonalizedCauses($email) ?: [];
-  $ai_report      = $ai->generateMonthlyReport($email) ?: [];
-  $ai_alerts      = $ai->getDonorAlerts($email) ?: [];
-  $ai_recurring   = $ai->suggestRecurring($email) ?: [];
-  // Award badges after every page load (idempotent)
-  $newly_earned   = award_badges($conn,$email);
-  $ai_badges      = get_donor_badges($conn,$email);
+  $ai_suggestions = ai_cached("donor_sug_{$email}",    300, fn()=> $ai->getDonorSuggestions($email) ?: []);
+  $ai_products    = ai_cached("donor_prod_{$email}",   300, fn()=> $ai->getProductRecommendations($email,0,4) ?: []);
+  $ai_impact      = ai_cached("donor_impact_{$email}", 300, fn()=> $ai->predictImpact() ?: []);
+  $ai_causes      = ai_cached("donor_causes_{$email}", 300, fn()=> $ai->getPersonalizedCauses($email) ?: []);
+  $ai_report      = ai_cached("donor_report_{$email}", 600, fn()=> $ai->generateMonthlyReport($email) ?: []);
+  $ai_alerts      = ai_cached("donor_alerts_{$email}", 180, fn()=> $ai->getDonorAlerts($email) ?: []);
+  $ai_recurring   = ai_cached("donor_recur_{$email}",  600, fn()=> $ai->suggestRecurring($email) ?: []);
+  // Badges: award idempotently, cache display list only
+  $newly_earned   = award_badges($conn, $email);
+  if ($newly_earned) ai_cache_clear();   // invalidate stale cache when badges change
+  $ai_badges      = ai_cached("donor_badges_{$email}", 300, fn()=> get_donor_badges($conn,$email) ?: []);
 } catch(Throwable $e){}
 
 /* ── AI impact vars ── */

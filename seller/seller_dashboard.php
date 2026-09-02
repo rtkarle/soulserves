@@ -43,12 +43,33 @@ $orders=[];
 try{$oq=$conn->prepare("SELECT o.*,GROUP_CONCAT(oi.product_name SEPARATOR ', ') AS items FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id WHERE o.seller_email=? GROUP BY o.id ORDER BY o.created_at DESC LIMIT 50");$oq->bind_param("s",$email);$oq->execute();$orders=$oq->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
 $weekly_rev=[]; $weekly_labels=[];
 try{for($i=6;$i>=0;$i--){$from=date('Y-m-d',strtotime("-$i days"));$rev=(float)$conn->query("SELECT COALESCE(SUM(total_amount),0) r FROM orders WHERE seller_email='$me' AND DATE(created_at)='$from' AND order_status NOT IN ('cancelled','returned')")->fetch_assoc()['r'];$weekly_rev[]=$rev;$weekly_labels[]=date('D',strtotime($from));}}catch(Throwable $e){}
-$ai=adhaar_ai(); $ai_recs=$ai_demand=[];
-try{$ai_recs=$ai->getSellerRecommendations($email)?:[];$ai_demand=$ai->sellerDemandForecast($email)?:[];}catch(Throwable $e){}
+$ai=adhaar_ai();
+$ai_recs=$ai_demand=[];
+try{
+  $ai_recs    = ai_cached("seller_recs_{$email}",    300, fn()=> $ai->getSellerRecommendations($email) ?: []);
+  $ai_demand  = ai_cached("seller_demand_{$email}",  600, fn()=> $ai->sellerDemandForecast($email) ?: []);
+}catch(Throwable $e){}
 $fraud_flags=[]; $sentiment=[]; $pricing=[];
-foreach(array_slice($orders,0,10) as $o){try{$f=$ai->detectOrderFraud((int)$o['id']);if(($f['risk']??'low')!=='low')$fraud_flags[$o['id']]=$f;}catch(Throwable $e){}}
-foreach(array_slice($products,0,5) as $p){try{if((int)($p['rev_count']??0)>0)$sentiment[$p['id']]=$ai->analyzeReviewSentiment((int)$p['id']);}catch(Throwable $e){}}
-foreach(array_slice($products,0,5) as $p){try{$pricing[$p['id']]=$ai->suggestPricing((int)$p['id']);}catch(Throwable $e){}}
+foreach(array_slice($orders,0,10) as $o){
+  try{
+    $oid=(int)$o['id'];
+    $f = ai_cached("seller_fraud_{$oid}", 600, fn() use($ai,$oid)=> $ai->detectOrderFraud($oid));
+    if(($f['risk']??'low')!=='low') $fraud_flags[$o['id']]=$f;
+  }catch(Throwable $e){}
+}
+foreach(array_slice($products,0,5) as $p){
+  try{
+    $pid=(int)$p['id'];
+    if((int)($p['rev_count']??0)>0)
+      $sentiment[$p['id']] = ai_cached("seller_sent_{$pid}", 600, fn() use($ai,$pid)=> $ai->analyzeReviewSentiment($pid));
+  }catch(Throwable $e){}
+}
+foreach(array_slice($products,0,5) as $p){
+  try{
+    $pid=(int)$p['id'];
+    $pricing[$p['id']] = ai_cached("seller_price_{$pid}", 300, fn() use($ai,$pid)=> $ai->suggestPricing($pid));
+  }catch(Throwable $e){}
+}
 $tab=$_GET['tab']??'overview'; $success=$_GET['success']??''; $err=$_GET['err']??'';
 $cats=['handicraft'=>'Handicraft','textile'=>'Textile','food_product'=>'Food Product','jewelry'=>'Jewelry','art'=>'Art','pottery'=>'Pottery','organic'=>'Organic','other'=>'Other'];
 $cat_icons=['handicraft'=>'🎨','textile'=>'🧵','food_product'=>'🍯','jewelry'=>'💍','art'=>'🖼️','pottery'=>'🏺','organic'=>'🌿','other'=>'📦'];

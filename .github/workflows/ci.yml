@@ -1,0 +1,70 @@
+name: SoulServe CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  php-lint:
+    name: PHP Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: php-cs-fixer
+
+      - name: Check PHP syntax (all .php files)
+        run: |
+          find . -name "*.php" \
+            -not -path "./.git/*" \
+            -not -path "./vendor/*" \
+            | xargs -P4 -I{} php -l {} \
+            | grep -v "No syntax errors" || true
+          # Fail if any syntax errors found
+          find . -name "*.php" \
+            -not -path "./.git/*" \
+            -not -path "./vendor/*" \
+            | xargs -P4 -I{} php -l {} 2>&1 \
+            | grep -c "Parse error" && exit 1 || true
+
+      - name: Check for raw die() exposing DB errors
+        run: |
+          if grep -rn 'die(.*\$.*error\|die(.*\$.*err\|die("DB\|die("Error' \
+            --include="*.php" \
+            --exclude-dir=vendor \
+            --exclude-dir=.git .; then
+            echo "ERROR: Found die() calls that may expose DB internals."
+            exit 1
+          fi
+          echo "No dangerous die() calls found."
+
+      - name: Check for SQL injection risks (raw string concat in queries)
+        run: |
+          # Warn on direct $_GET/$_POST in query strings (not parameterized)
+          HITS=$(grep -rn 'query.*\$_GET\|query.*\$_POST\|query.*\$_REQUEST' \
+            --include="*.php" \
+            --exclude-dir=vendor \
+            --exclude-dir=.git . | wc -l)
+          echo "Potential raw input in queries: $HITS (manual review required)"
+
+  deploy:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    needs: php-lint
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Trigger Render Deploy Hook
+        run: |
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
+            curl -sS -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+            echo "Deploy triggered."
+          else
+            echo "RENDER_DEPLOY_HOOK secret not set — skipping auto-deploy."
+          fi

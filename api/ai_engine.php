@@ -1311,3 +1311,32 @@ function adhaar_ai(): AdhaarAI {
     if (!isset($_adhaar_ai)) $_adhaar_ai = new AdhaarAI($conn);
     return $_adhaar_ai;
 }
+
+/**
+ * Cache AI results in session to avoid repeat DB queries.
+ * TTL default: 300 seconds (5 minutes).
+ * Usage: $result = ai_cached("donor_sug_$email", 300, fn()=> $ai->getDonorSuggestions($email));
+ */
+function ai_cached(string $key, int $ttl, callable $fn): mixed {
+    if (session_status() === PHP_SESSION_NONE) session_start();
+    $sk = '_ai_cache_' . md5($key);
+    if (isset($_SESSION[$sk]) &&
+        is_array($_SESSION[$sk]) &&
+        isset($_SESSION[$sk]['ts']) &&
+        (time() - $_SESSION[$sk]['ts']) < $ttl) {
+        return $_SESSION[$sk]['data'];
+    }
+    $data = $fn();
+    $_SESSION[$sk] = ['data' => $data, 'ts' => time()];
+    return $data;
+}
+
+/**
+ * Invalidate all AI cache entries (call after new donation, order, etc.)
+ */
+function ai_cache_clear(): void {
+    if (session_status() === PHP_SESSION_NONE) return;
+    foreach (array_keys($_SESSION) as $k) {
+        if (str_starts_with($k, '_ai_cache_')) unset($_SESSION[$k]);
+    }
+}

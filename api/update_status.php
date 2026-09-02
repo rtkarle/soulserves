@@ -27,12 +27,17 @@ $allowed_statuses = ['accepted','rejected','scheduled','out_for_pickup','picked_
 $allowed_tables   = ['food_donations','cloth_donations'];
 
 if (!$id || !in_array($status, $allowed_statuses) || !in_array($table, $allowed_tables)) {
-    die("Invalid request.");
+    http_response_code(400);
+    $ref = $_SERVER['HTTP_REFERER'] ?? '../donor/donor_dashboard.php';
+    header("Location: $ref"); exit;
 }
 
-// Fetch existing row for donor email + current data
 $row = $conn->query("SELECT donor_email, volunteer_email FROM `$table` WHERE id=$id")->fetch_assoc();
-if (!$row) die("Donation not found.");
+if (!$row) {
+    http_response_code(404);
+    $ref = $_SERVER['HTTP_REFERER'] ?? '../donor/donor_dashboard.php';
+    header("Location: $ref"); exit;
+}
 
 $donorEmail      = $row['donor_email']    ?? '';
 $volunteerEmail  = $row['volunteer_email'] ?? ($_SESSION['user_email'] ?? '');

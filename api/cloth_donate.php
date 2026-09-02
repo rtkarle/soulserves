@@ -34,7 +34,10 @@ $stmt->bind_param("ssississs",
     $donor_email, $purchase_time, $quantity, $cloth_type,
     $condition_type, $is_clean, $pickup_address, $contact, $dbPath
 );
-if (!$stmt->execute()) { die("DB Error: " . $stmt->error); }
+if (!$stmt->execute()) {
+    error_log("[cloth_donate] DB insert failed: " . $stmt->error . " | donor: $donor_email");
+    header("Location: ../donor/donate.php?error=server"); exit;
+}
 $new_id = (int)$conn->insert_id;
 
 /* ── Generate unique donation_id  e.g. DON-CLO-000017 ── */
@@ -54,6 +57,10 @@ $nr = $conn->prepare("SELECT name FROM register WHERE email=?");
 $nr->bind_param("s", $donor_email); $nr->execute();
 $donor_name = $nr->get_result()->fetch_assoc()['name'] ?? 'Donor';
 sendDonationReceived($donor_email, $donor_name, 'cloth', $quantity . ' pieces of ' . $cloth_type, $pickup_address);
+
+/* ── Invalidate AI cache so dashboard reflects new donation immediately ── */
+require_once __DIR__ . '/../api/ai_engine.php';
+ai_cache_clear();
 
 header("Location: ../donor/donor_dashboard.php?success=cloth&don_id=" . urlencode($donation_id));
 exit;

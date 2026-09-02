@@ -44,13 +44,13 @@ if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['task_action'])){
 $tab = $_GET['tab'] ?? 'overview';
 $me  = mysqli_real_escape_string($conn, $email);
 
-/* ── AI Engine ── */
+/* ── AI Engine — session-cached (5-min TTL) ── */
 $ai = adhaar_ai();
 $ai_recs=$ai_route=$ai_workload=[];
 try {
-    $ai_recs     = $ai->getVolunteerRecommendations($email) ?: [];
-    $ai_route    = $ai->suggestPickupRoute($email) ?: [];
-    $ai_workload = $ai->checkVolunteerWorkload($email) ?: [];
+    $ai_recs     = ai_cached("vol_recs_{$email}",      300, fn()=> $ai->getVolunteerRecommendations($email) ?: []);
+    $ai_route    = ai_cached("vol_route_{$email}",     300, fn()=> $ai->suggestPickupRoute($email) ?: []);
+    $ai_workload = ai_cached("vol_workload_{$email}",  120, fn()=> $ai->checkVolunteerWorkload($email) ?: []);
 } catch(Throwable $e){}
 
 /* ── Data queries ── */
@@ -80,10 +80,16 @@ try{$pvq=$conn->query("SELECT name,email,mobile,address FROM register WHERE role
 $cart_count  = (int)$conn->query("SELECT COUNT(*) c FROM cart WHERE user_email='$me'")->fetch_assoc()['c'];
 $order_count = (int)$conn->query("SELECT COUNT(*) c FROM orders WHERE buyer_email='$me'")->fetch_assoc()['c'];
 
-/* ── ETA for each assigned donation ── */
+/* ── ETA for each assigned donation — cached per donation ── */
 $etas = [];
 foreach($assigned as $d){
-    try{ $etas[$d['id'].'_'.strtolower($d['type'])] = $ai->predictETA((int)$d['id'],$d['type']==='Food'?'food':'cloth'); }catch(Throwable $e){}
+    try{
+        $dtype = $d['type']==='Food'?'food':'cloth';
+        $etas[$d['id'].'_'.$dtype] = ai_cached(
+            "vol_eta_{$d['id']}_{$dtype}", 180,
+            fn() use($ai,$d,$dtype)=> $ai->predictETA((int)$d['id'], $dtype)
+        );
+    }catch(Throwable $e){}
 }
 
 /* ── Volunteer badges ── */

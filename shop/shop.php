@@ -22,6 +22,22 @@ $price_min = isset($_GET['pmin']) && $_GET['pmin'] !== '' ? (float)$_GET['pmin']
 $price_max = isset($_GET['pmax']) && $_GET['pmax'] !== '' ? (float)$_GET['pmax'] : null;
 $min_rating= isset($_GET['rating']) && $_GET['rating'] !== '' ? (float)$_GET['rating'] : null;
 
+/* ── Whitelist category to prevent injection ── */
+$allowed_cats = ['handicraft','textile','food_product','jewelry','art','pottery','organic','other'];
+if ($cat !== 'all' && !in_array($cat, $allowed_cats, true)) $cat = 'all';
+
+/* ── Whitelist sort ── */
+$allowed_sorts = ['newest','price_low','price_high','popular','rating','discount'];
+if (!in_array($sort, $allowed_sorts, true)) $sort = 'newest';
+
+/* ── Clamp price range to prevent absurd values ── */
+if ($price_min !== null) $price_min = max(0, min(999999, $price_min));
+if ($price_max !== null) $price_max = max(0, min(999999, $price_max));
+if ($min_rating !== null) $min_rating = max(0, min(5, $min_rating));
+
+/* ── Sanitize search: limit length ── */
+if (strlen($search) > 200) $search = substr($search, 0, 200);
+
 /* ── Log search for AI (logged-in only) ── */
 if ($search && $ai) {
     $ai->logSearch($me, $search, $cat !== 'all' ? $cat : null, 0);
