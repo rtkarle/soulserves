@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: text/html; charset=utf-8');
 require_once __DIR__ . '/../config/db.php';
 if (session_status()===PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['user_email'])) { header("Location: ../auth/login.php"); exit; }
@@ -95,6 +96,7 @@ tbody tr:nth-child(3){animation-delay:.12s}tbody tr:nth-child(n+4){animation-del
   <div class="filter-wrap">
     <div class="filter-bar">
       <?php
+header('Content-Type: text/html; charset=utf-8');
       $filters=[['all','All'],['food','🍱 Food'],['cloth','👕 Clothes'],['pending','⏳ Pending'],['delivered','✅ Delivered']];
       foreach($filters as [$v,$l]):?>
       <a href="history.php?filter=<?=$v?>&page=1" class="filter-btn <?=$filter===$v?'active':''?>"><?=$l?></a>
@@ -136,6 +138,7 @@ tbody tr:nth-child(3){animation-delay:.12s}tbody tr:nth-child(n+4){animation-del
     <?php endif; ?>
 
     <?php
+header('Content-Type: text/html; charset=utf-8');
     $start=max(1,$page-2); $end=min($total_pages,$page+2);
     if($start>1): ?><a href="?filter=<?=$filter?>&page=1" class="page-btn">1</a><?php if($start>2): ?><span class="page-btn disabled">…</span><?php endif; endif;
     for($i=$start;$i<=$end;$i++): ?>

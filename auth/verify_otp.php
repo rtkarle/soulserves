@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: text/html; charset=utf-8');
 session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/mail.php';
@@ -190,6 +191,7 @@ body{
 <?php if($success!="") echo "<div class='success'>$success</div>"; ?>
 
 <?php
+header('Content-Type: text/html; charset=utf-8');
 // Show OTP on screen — works even when email fails (local dev)
 $devOtp = $_SESSION['regdata']['otp'] ?? null;
 if ($devOtp): ?>

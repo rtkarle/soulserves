@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: text/html; charset=utf-8');
 /**
  * Adhaar – Activities & News Page
  * News & Events section loads from DB (events_news table).

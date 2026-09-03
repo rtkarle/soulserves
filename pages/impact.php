@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: text/html; charset=utf-8');
 /**
  * pages/impact.php  — LIVE database-connected Impact page
  * Replaces the hardcoded impact.html
@@ -241,6 +242,7 @@ section{padding:5.5rem 2rem}
   <div style="max-width:800px;margin:auto">
     <div style="text-align:center;margin-bottom:2.5rem"><div class="sec-label">Goals Progress</div><h2 class="sec-h">Towards Annual <span>Targets</span></h2></div>
     <?php
+header('Content-Type: text/html; charset=utf-8');
     $goals = [
       ['🍲 Food Donations',    $food_total,  $food_goal,  'Food units collected'],
       ['👕 Clothing Donations', $cloth_total, $cloth_goal, 'Clothing items collected'],

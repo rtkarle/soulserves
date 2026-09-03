@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: text/html; charset=utf-8');
 session_start();
 require_once __DIR__ . '/../config/db.php';
 if (!isset($_SESSION['user_email'])) { header("Location: ../auth/login.php"); exit; }
@@ -175,6 +176,7 @@ header{background:#fff;box-shadow:0 2px 12px rgba(16,42,67,.06);position:sticky;
   </div>
   <?php else: ?>
   <?php
+header('Content-Type: text/html; charset=utf-8');
   $status_steps=['placed','confirmed','shipped','out_for_delivery','delivered'];
   foreach($orders as $o):
     $names = explode('|',$o['item_names']??'');

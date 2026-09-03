@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: text/html; charset=utf-8');
 session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/upload.php';
@@ -951,6 +952,7 @@ $cat_icons=['handicraft'=>'🎨','textile'=>'🧵','food_product'=>'🍯','jewel
 <!-- Stats grid -->
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:20px">
   <?php
+header('Content-Type: text/html; charset=utf-8');
   $delivered = sq_i($conn,"SELECT COUNT(*) c FROM orders WHERE seller_email='$me' AND order_status='delivered'");
   $cancelled = sq_i($conn,"SELECT COUNT(*) c FROM orders WHERE seller_email='$me' AND order_status IN ('cancelled','returned')");
   $total_reviews = sq_i($conn,"SELECT COUNT(*) c FROM product_reviews pr JOIN products p ON p.id=pr.product_id WHERE p.seller_email='$me'");

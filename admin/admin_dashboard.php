@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: text/html; charset=utf-8');
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/upload.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
@@ -570,6 +571,7 @@ body{ background:var(--bg); color:var(--text); min-height:100vh; }
       <div class="health-box" style="margin-top:16px">
         <div class="hb-title">Platform Health</div>
         <?php
+header('Content-Type: text/html; charset=utf-8');
         $total_don = $stats['food_total'] + $stats['cloth_total'];
         $total_del = $stats['food_delivered'] + $stats['cloth_delivered'];
         $del_rate  = $total_don > 0 ? round($total_del/$total_don*100) : 0;
@@ -863,6 +865,7 @@ body{ background:var(--bg); color:var(--text); min-height:100vh; }
 </div>
 
 <?php
+header('Content-Type: text/html; charset=utf-8');
 $msg_map = ['created'=>'✅ Post created!','updated'=>'✅ Post updated!','deleted'=>'🗑️ Post deleted.','toggled'=>'🔄 Visibility toggled.','missing_fields'=>'⚠️ Title and content are required.'];
 $emsg = $_GET['msg'] ?? '';
 if ($emsg && $tab === 'events' && isset($msg_map[$emsg])): ?>

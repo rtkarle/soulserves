@@ -1,4 +1,5 @@
 <?php
+header('Content-Type: text/html; charset=utf-8');
 // ── Handles both GET (render form) and POST (process login) ──
 require_once __DIR__ . '/../config/db.php';
 

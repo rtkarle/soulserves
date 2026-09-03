@@ -76,7 +76,7 @@ $order_map = [
 $order_sql = $order_map[$sort] ?? 'p.created_at DESC';
 
 $pq = $conn->query(
-    "SELECT p.*, s.store_name, s.village, s.state
+    "SELECT p.*, s.store_name, s.village, s.district AS state
      FROM products p
      JOIN seller_stores s ON s.seller_email=p.seller_email
      WHERE $where

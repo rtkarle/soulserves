@@ -1,5 +1,11 @@
 DirectoryIndex index.html index.php
 
+# ── Force UTF-8 charset for all responses ──────────────────
+AddDefaultCharset UTF-8
+<IfModule mod_mime.c>
+    AddCharset UTF-8 .php .html .htm .css .js .json .xml .txt
+</IfModule>
+
 # Adhaar - The SoulServe | Apache Config
 
 # HTTPS redirect via X-Forwarded-Proto (Render proxy)
