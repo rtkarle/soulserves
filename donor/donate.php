@@ -227,34 +227,186 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
         </div>
       </div>
 
-      <!-- ── CLOTHES FIELDS ── -->
+      <!-- ── CLOTHES & FOOTWEAR FIELDS ── -->
       <div id="grpClothes" class="hidden">
-        <div class="field-row">
-          <div class="field">
-            <label>Clothing Type *</label>
-            <select name="cloth_type" id="fieldClothType">
-              <option value="">Select type</option>
-              <option value="Men">Men's Clothing</option>
-              <option value="Women">Women's Clothing</option>
-              <option value="Children">Children's Clothing</option>
-              <option value="Infant">Infant / Baby</option>
-              <option value="Mixed">Mixed / All types</option>
-              <option value="Winter">Winter Wear</option>
-              <option value="School Uniform">School Uniform</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Condition *</label>
-            <select name="condition_type" id="fieldCondition">
-              <option value="new">New / Like New</option>
-              <option value="good" selected>Good</option>
-              <option value="fair">Fair (minor wear)</option>
-            </select>
+
+        <!-- Sub-category: Clothes vs Footwear -->
+        <div class="field">
+          <label>What are you donating? *</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border:2px solid var(--border);border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;transition:.2s" id="lblClothes">
+              <input type="radio" name="cloth_subcat" value="clothes" id="subCatClothes" style="accent-color:var(--accent)" onchange="toggleClothSubcat('clothes')" checked>
+              👕 Clothes / Garments
+            </label>
+            <label style="display:flex;align-items:center;gap:10px;padding:12px 16px;border:2px solid var(--border);border-radius:12px;cursor:pointer;font-size:13px;font-weight:600;transition:.2s" id="lblFootwear">
+              <input type="radio" name="cloth_subcat" value="footwear" id="subCatFootwear" style="accent-color:var(--accent)" onchange="toggleClothSubcat('footwear')">
+              👟 Footwear / Shoes
+            </label>
           </div>
         </div>
-        <div class="checkbox-row">
+
+        <!-- ── CLOTHES specific ── -->
+        <div id="subGrpClothes">
+          <div class="field-row">
+            <div class="field">
+              <label>For Whom? *</label>
+              <select name="cloth_for" id="fieldClothFor" onchange="updateClothSizes()">
+                <option value="">Select</option>
+                <option value="Men">Men</option>
+                <option value="Women">Women</option>
+                <option value="Boys">Boys (5–14 yrs)</option>
+                <option value="Girls">Girls (5–14 yrs)</option>
+                <option value="Toddler">Toddler (2–5 yrs)</option>
+                <option value="Infant">Infant (0–2 yrs)</option>
+                <option value="Mixed">Mixed / All</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Garment Type *</label>
+              <select name="cloth_garment_type" id="fieldGarmentType">
+                <option value="">Select type</option>
+                <optgroup label="Tops">
+                  <option value="T-Shirt">T-Shirt</option>
+                  <option value="Shirt">Shirt / Formal Shirt</option>
+                  <option value="Kurta">Kurta / Kurti</option>
+                  <option value="Blouse">Blouse / Top</option>
+                  <option value="Sweater">Sweater / Pullover</option>
+                  <option value="Jacket">Jacket / Hoodie</option>
+                  <option value="Saree Blouse">Saree Blouse</option>
+                </optgroup>
+                <optgroup label="Bottoms">
+                  <option value="Pant">Pant / Trouser</option>
+                  <option value="Jeans">Jeans</option>
+                  <option value="Salwar">Salwar / Churidar</option>
+                  <option value="Skirt">Skirt / Lehenga</option>
+                  <option value="Shorts">Shorts</option>
+                </optgroup>
+                <optgroup label="Full Sets">
+                  <option value="Saree">Saree</option>
+                  <option value="Suit">Suit Set (Salwar Kameez)</option>
+                  <option value="School Uniform">School Uniform</option>
+                  <option value="Track Suit">Track Suit / Sportswear</option>
+                  <option value="Night Dress">Night Dress / Pyjamas</option>
+                  <option value="Dress / Frock">Dress / Frock</option>
+                </optgroup>
+                <optgroup label="Winter Wear">
+                  <option value="Jacket / Coat">Jacket / Coat</option>
+                  <option value="Blanket / Shawl">Blanket / Shawl</option>
+                  <option value="Woolen Cap / Gloves">Woolen Cap / Gloves</option>
+                </optgroup>
+                <optgroup label="Others">
+                  <option value="Undergarments">Undergarments (new only)</option>
+                  <option value="Dupatta / Stole">Dupatta / Stole</option>
+                  <option value="Mixed Lot">Mixed / Assorted Lot</option>
+                </optgroup>
+              </select>
+            </div>
+          </div>
+
+          <!-- Sizes -->
+          <div class="field" id="clothSizeField">
+            <label>Size(s) Available *</label>
+            <div id="clothSizeOptions" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
+              <!-- Populated by JS based on whom -->
+            </div>
+            <input type="hidden" name="cloth_sizes" id="fieldClothSizes">
+            <div style="font-size:11px;color:var(--muted);margin-top:6px">Select all sizes you have</div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label>Number of Pieces *</label>
+              <input type="number" name="cloth_pieces" id="fieldClothPieces" min="1" max="500" placeholder="e.g. 5">
+            </div>
+            <div class="field">
+              <label>Condition *</label>
+              <select name="condition_type" id="fieldCondition">
+                <option value="new">New / Brand New (tags on)</option>
+                <option value="like_new">Like New (worn once/twice)</option>
+                <option value="good" selected>Good (gently used)</option>
+                <option value="fair">Fair (minor wear/fade)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Color / Pattern (optional)</label>
+            <input type="text" name="cloth_color" placeholder="e.g. Blue, White stripes, Floral print, Mixed colors">
+          </div>
+        </div>
+
+        <!-- ── FOOTWEAR specific ── -->
+        <div id="subGrpFootwear" class="hidden">
+          <div class="field-row">
+            <div class="field">
+              <label>For Whom? *</label>
+              <select name="footwear_for" id="fieldFootwearFor" onchange="updateFootwearSizes()">
+                <option value="">Select</option>
+                <option value="Men">Men</option>
+                <option value="Women">Women</option>
+                <option value="Boys">Boys</option>
+                <option value="Girls">Girls</option>
+                <option value="Children">Children (unisex)</option>
+                <option value="Infant">Infant / Toddler</option>
+                <option value="Mixed">Mixed</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Footwear Type *</label>
+              <select name="footwear_type">
+                <option value="">Select type</option>
+                <option value="School Shoes">School Shoes</option>
+                <option value="Sports Shoes">Sports / Running Shoes</option>
+                <option value="Sandals">Sandals / Chappals</option>
+                <option value="Formal Shoes">Formal Shoes</option>
+                <option value="Slippers">Slippers / Flip-flops</option>
+                <option value="Boots">Boots / Ankle Boots</option>
+                <option value="Heels">Heels / Wedges</option>
+                <option value="Mixed">Mixed / Assorted</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Shoe sizes -->
+          <div class="field">
+            <label>Shoe Size(s) *</label>
+            <div id="footwearSizeOptions" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
+              <!-- Populated by JS -->
+            </div>
+            <input type="hidden" name="footwear_sizes" id="fieldFootwearSizes">
+            <div style="font-size:11px;color:var(--muted);margin-top:6px">Select all sizes you have</div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label>Number of Pairs *</label>
+              <input type="number" name="footwear_pairs" min="1" max="100" placeholder="e.g. 2">
+            </div>
+            <div class="field">
+              <label>Condition *</label>
+              <select name="condition_type">
+                <option value="new">New / Unused</option>
+                <option value="like_new">Like New (worn very little)</option>
+                <option value="good" selected>Good (lightly worn)</option>
+                <option value="fair">Fair (some wear)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Common to both clothes + footwear -->
+        <div class="checkbox-row" style="margin-top:6px">
           <input type="checkbox" name="is_clean" id="isClean" value="1">
-          <label for="isClean">I confirm the clothes are clean and washed</label>
+          <label for="isClean">I confirm all items are clean, washed and ready to wear</label>
+        </div>
+        <div class="field">
+          <label>Packing Status</label>
+          <select name="cloth_packed">
+            <option value="loose">Loose / Not packed</option>
+            <option value="bag">Packed in bags</option>
+            <option value="box">Packed in boxes</option>
+            <option value="bundled">Bundled with rubber bands</option>
+          </select>
         </div>
       </div>
 
@@ -462,13 +614,13 @@ const CATS = {
     requiredGroups: ['food_time','safe_hours','foodSafeConfirm']
   },
   clothes: {
-    icon:'👕', name:'Clothing Donation',
-    sub:'Clothes must be clean, wearable and in good condition.',
-    impact:'👕 Brings warmth and dignity to someone in need.',
-    guide: ['Clean and washed clothes only', 'No torn or badly worn items', 'Fold and pack neatly', 'Any gender/age clothing accepted'],
+    icon:'👕', name:'Clothes & Footwear',
+    sub:'Clothes, shoes, footwear — size details help us match the right beneficiary.',
+    impact:'👕 Clean clothes and shoes bring dignity and confidence.',
+    guide: ['Clean and washed items only', 'No torn or badly worn items', 'Select sizes accurately — it helps us match beneficiaries', 'Footwear: wipe clean before donating'],
     groups: ['grpClothes'],
-    qtyPlaceholder:'e.g. 5 shirts, 3 pants, 2 sarees',
-    descPlaceholder:'What type of clothing? Mention size/gender if known...'
+    qtyPlaceholder:'e.g. 5 shirts, 3 pants / 2 pairs of shoes',
+    descPlaceholder:'Describe what you\'re donating — type, color, brand if known...'
   },
   study_material: {
     icon:'📚', name:'Study Material Donation',
@@ -653,6 +805,78 @@ document.getElementById('donateForm').addEventListener('submit', function(e) {
 
   setStep(4);
 });
+
+// ── Clothes sub-category toggle ──
+function toggleClothSubcat(val) {
+  const cg = document.getElementById('subGrpClothes');
+  const fg = document.getElementById('subGrpFootwear');
+  if (!cg || !fg) return;
+  cg.classList.toggle('hidden', val !== 'clothes');
+  fg.classList.toggle('hidden', val !== 'footwear');
+  // highlight selected label
+  document.getElementById('lblClothes').style.borderColor = val==='clothes' ? 'var(--accent)' : 'var(--border)';
+  document.getElementById('lblFootwear').style.borderColor = val==='footwear' ? 'var(--accent)' : 'var(--border)';
+}
+
+// ── Size chip builder ──
+const CLOTH_SIZES = {
+  Men:     ['XS','S','M','L','XL','XXL','3XL','Free Size'],
+  Women:   ['XS','S','M','L','XL','XXL','Free Size'],
+  Boys:    ['2Y','3Y','4Y','5Y','6Y','7Y','8Y','9Y','10Y','11Y','12Y','13Y','14Y'],
+  Girls:   ['2Y','3Y','4Y','5Y','6Y','7Y','8Y','9Y','10Y','11Y','12Y','13Y','14Y'],
+  Toddler: ['6M','9M','12M','18M','24M','2Y','3Y','4Y','5Y'],
+  Infant:  ['0-3M','3-6M','6-9M','9-12M','12-18M'],
+  Mixed:   ['XS','S','M','L','XL','XXL','Kids','Free Size'],
+};
+const FOOTWEAR_SIZES = {
+  Men:      ['6','7','8','9','10','11','12'],
+  Women:    ['3','4','5','6','7','8','9'],
+  Boys:     ['1','2','3','4','5','6','7','8','9','10'],
+  Girls:    ['1','2','3','4','5','6','7','8'],
+  Children: ['1','2','3','4','5','6','7','8','9','10'],
+  Infant:   ['0','1','2','3','4','5'],
+  Mixed:    ['All Sizes'],
+};
+
+function buildSizeChips(containerId, hiddenId, sizes) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  c.innerHTML = '';
+  sizes.forEach(s => {
+    const chip = document.createElement('label');
+    chip.style.cssText = 'display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:.2s;background:#fafaf6;color:var(--muted)';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.value = s; cb.style.display = 'none';
+    cb.addEventListener('change', () => {
+      chip.style.borderColor    = cb.checked ? 'var(--accent)' : 'var(--border)';
+      chip.style.background     = cb.checked ? 'rgba(0,109,119,.08)' : '#fafaf6';
+      chip.style.color          = cb.checked ? 'var(--accent)' : 'var(--muted)';
+      chip.style.fontWeight     = cb.checked ? '800' : '600';
+      // Update hidden field
+      const selected = [...c.querySelectorAll('input:checked')].map(i=>i.value);
+      document.getElementById(hiddenId).value = selected.join(', ');
+    });
+    chip.appendChild(cb);
+    chip.appendChild(document.createTextNode(s));
+    c.appendChild(chip);
+  });
+}
+
+function updateClothSizes() {
+  const who = document.getElementById('fieldClothFor')?.value || 'Mixed';
+  const sizes = CLOTH_SIZES[who] || CLOTH_SIZES['Mixed'];
+  buildSizeChips('clothSizeOptions', 'fieldClothSizes', sizes);
+}
+
+function updateFootwearSizes() {
+  const who = document.getElementById('fieldFootwearFor')?.value || 'Mixed';
+  const sizes = FOOTWEAR_SIZES[who] || ['All Sizes'];
+  buildSizeChips('footwearSizeOptions', 'fieldFootwearSizes', sizes);
+}
+
+// Init default sizes on page load
+updateClothSizes();
+updateFootwearSizes();
 
 // Mobile menu
 const mt = document.getElementById('menuToggle');

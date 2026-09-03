@@ -99,8 +99,41 @@ switch ($category) {
         }
         break;
     case 'clothes':
-        $cloth_type = trim($_POST['cloth_type'] ?? '');
+        $cloth_type = trim($_POST['cloth_for'] ?? '') ?: trim($_POST['cloth_type'] ?? '');
         $is_clean   = isset($_POST['is_clean']) ? 1 : 0;
+        // Extra fields stored in description supplement
+        $cloth_subcat   = trim($_POST['cloth_subcat']       ?? '');
+        $cloth_for      = trim($_POST['cloth_for']          ?? '');
+        $cloth_garment  = trim($_POST['cloth_garment_type'] ?? '');
+        $cloth_sizes    = trim($_POST['cloth_sizes']        ?? '') ?: trim($_POST['footwear_sizes'] ?? '');
+        $cloth_pieces   = (int)($_POST['cloth_pieces']      ?? $_POST['footwear_pairs'] ?? 0) ?: null;
+        $cloth_color    = trim($_POST['cloth_color']        ?? '');
+        $cloth_packed   = trim($_POST['cloth_packed']       ?? '');
+        $footwear_for   = trim($_POST['footwear_for']       ?? '');
+        $footwear_type  = trim($_POST['footwear_type']      ?? '');
+        $footwear_sizes = trim($_POST['footwear_sizes']     ?? '');
+        $footwear_pairs = (int)($_POST['footwear_pairs']    ?? 0) ?: null;
+
+        // Build rich description auto-supplement
+        $extra_parts = [];
+        if ($cloth_subcat === 'footwear') {
+            if ($footwear_type) $extra_parts[] = "Type: $footwear_type";
+            if ($footwear_for)  $extra_parts[] = "For: $footwear_for";
+            if ($footwear_sizes) $extra_parts[] = "Sizes: $footwear_sizes";
+            if ($footwear_pairs) $extra_parts[] = "Pairs: $footwear_pairs";
+        } else {
+            if ($cloth_garment) $extra_parts[] = "Garment: $cloth_garment";
+            if ($cloth_for)     $extra_parts[] = "For: $cloth_for";
+            if ($cloth_sizes)   $extra_parts[] = "Sizes: $cloth_sizes";
+            if ($cloth_pieces)  $extra_parts[] = "Pieces: $cloth_pieces";
+            if ($cloth_color)   $extra_parts[] = "Color: $cloth_color";
+            if ($cloth_packed)  $extra_parts[] = "Packing: $cloth_packed";
+        }
+        if (!empty($extra_parts)) {
+            $description .= ' | ' . implode(' | ', $extra_parts);
+        }
+        // Store sizes in subject_grade field (reuse existing column)
+        $subject_grade = $cloth_subcat === 'footwear' ? $footwear_sizes : $cloth_sizes;
         break;
     case 'study_material':
     case 'school_supplies':
