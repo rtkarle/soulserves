@@ -1,5 +1,11 @@
 {
     "require": {
-        "google/apiclient": "*"
+        "php": ">=8.1",
+        "google/apiclient": "^2.15",
+        "phpmailer/phpmailer": "6.9"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
     }
 }

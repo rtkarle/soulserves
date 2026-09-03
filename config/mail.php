@@ -1,10 +1,32 @@
 <?php
+/* ── Load PHPMailer — composer autoload preferred, local fallback for XAMPP ── */
+if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
+} elseif (file_exists(__DIR__ . '/../PHPMailer/src/PHPMailer.php')) {
+    require_once __DIR__ . '/../PHPMailer/src/Exception.php';
+    require_once __DIR__ . '/../PHPMailer/src/PHPMailer.php';
+    require_once __DIR__ . '/../PHPMailer/src/SMTP.php';
+} else {
+    /* PHPMailer missing — define stubs so the app doesn't 500 */
+    error_log('PHPMailer not found — emails will be silently skipped.');
+    if (!function_exists('sendMail')) {
+        function sendMail(string $to, string $subject, string $body): bool { return false; }
+    }
+    if (!function_exists('sendOTPMail'))          { function sendOTPMail(string $to, string $otp): bool { return false; } }
+    if (!function_exists('sendStatusNotification')){ function sendStatusNotification(...$a): bool { return false; } }
+    if (!function_exists('sendWelcomeMail'))       { function sendWelcomeMail(...$a): bool { return false; } }
+    if (!function_exists('sendDonationReceived'))  { function sendDonationReceived(...$a): bool { return false; } }
+    if (!function_exists('sendOrderConfirmation')) { function sendOrderConfirmation(...$a): bool { return false; } }
+    if (!function_exists('sendSellerOrderAlert'))  { function sendSellerOrderAlert(...$a): bool { return false; } }
+    if (!function_exists('sendOrderStatusUpdate')) { function sendOrderStatusUpdate(...$a): bool { return false; } }
+    if (!function_exists('sendVolunteerWelcome'))  { function sendVolunteerWelcome(...$a): bool { return false; } }
+    if (!function_exists('sendSellerVerified'))    { function sendSellerVerified(...$a): bool { return false; } }
+    if (!function_exists('sendAdminContactAlert')) { function sendAdminContactAlert(...$a): bool { return false; } }
+    return; /* stop rest of file from executing */
+}
+
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
-
-require __DIR__ . "/../PHPMailer/src/Exception.php";
-require __DIR__ . "/../PHPMailer/src/PHPMailer.php";
-require __DIR__ . "/../PHPMailer/src/SMTP.php";
 
 if (!defined('MAIL_USERNAME')) {
     require_once __DIR__ . '/config.php';
