@@ -36,6 +36,11 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['submit_return'])) {
     $oq->bind_param("is",$oid,$me); $oq->execute();
     $ord = $oq->get_result()->fetch_assoc();
     if($ord) {
+        /* ── Enforce 7-day return window ── */
+        $order_age_days = (int)$conn->query("SELECT DATEDIFF(NOW(),updated_at) d FROM orders WHERE id=$oid")->fetch_assoc()['d'];
+        if ($order_age_days > 7) {
+            header("Location: my_orders.php?tab=delivered&msg=return_expired"); exit;
+        }
         $rq = $conn->prepare("INSERT INTO return_requests(order_id,product_id,buyer_email,seller_email,reason,description,status) VALUES(?,?,?,?,?,?,'requested')");
         $rq->bind_param("iissss",$oid,$pid,$me,$ord['seller_email'],$reason,$desc);
         $rq->execute();
@@ -158,6 +163,7 @@ header{background:#fff;box-shadow:0 2px 12px rgba(16,42,67,.06);position:sticky;
 
   <?php if($msg==='review'): ?><div class="alert alert-success">⭐ Review submitted successfully!</div>
   <?php elseif($msg==='return'): ?><div class="alert alert-success">↩️ Return request submitted! The seller will review it shortly.</div>
+  <?php elseif($msg==='return_expired'): ?><div class="alert alert-error" style="background:#fee2e2;color:#991b1b;">⚠️ Return window has expired. Returns are only accepted within 7 days of delivery.</div>
   <?php elseif($success_order): ?><div class="alert alert-success">🎉 Order placed successfully! Order #<?=htmlspecialchars($success_order)?></div>
   <?php endif; ?>
 
@@ -176,7 +182,6 @@ header{background:#fff;box-shadow:0 2px 12px rgba(16,42,67,.06);position:sticky;
   </div>
   <?php else: ?>
   <?php
-header('Content-Type: text/html; charset=utf-8');
   $status_steps=['placed','confirmed','shipped','out_for_delivery','delivered'];
   foreach($orders as $o):
     $names = explode('|',$o['item_names']??'');

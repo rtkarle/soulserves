@@ -41,6 +41,13 @@ if ($action === 'add') {
     $ins->execute();
 }
 elseif ($action === 'update') {
+    /* ── Check stock before updating qty ── */
+    $sq = $conn->prepare("SELECT stock FROM products WHERE id=? AND is_active=1");
+    $sq->bind_param("i",$pid); $sq->execute();
+    $prod = $sq->get_result()->fetch_assoc();
+    if (!$prod) { echo json_encode(['success'=>false,'message'=>'Product not available']); exit; }
+    if ($qty > $prod['stock']) { $qty = $prod['stock']; } /* cap at available stock */
+    if ($qty < 1) { $qty = 1; }
     $upd = $conn->prepare("UPDATE cart SET quantity=? WHERE user_email=? AND product_id=?");
     $upd->bind_param("isi",$qty,$me,$pid);
     $upd->execute();

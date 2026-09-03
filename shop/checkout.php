@@ -14,13 +14,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
     $cart_items = $cq->get_result()->fetch_all(MYSQLI_ASSOC);
     if (empty($cart_items)) { header("Location: cart.php"); exit; }
 
+    /* ── Stock check BEFORE placing order ── */
+    $stock_errors = [];
+    foreach ($cart_items as $ci) {
+        if ($ci['stock'] < $ci['quantity']) {
+            $stock_errors[] = htmlspecialchars($ci['pname']) . ' (only ' . $ci['stock'] . ' left)';
+        }
+    }
+    if (!empty($stock_errors)) {
+        $_SESSION['checkout_error'] = 'Some items are out of stock: ' . implode(', ', $stock_errors);
+        header("Location: cart.php?error=stock"); exit;
+    }
+
     $subtotal = 0;
     foreach($cart_items as $ci) $subtotal += $ci['price'] * $ci['quantity'];
     $shipping = $subtotal >= 499 ? 0 : 49;
     $total    = $subtotal + $shipping;
-    $order_no = 'ADH'.strtoupper(substr(uniqid(),5)).(rand(100,999));
+    $order_no = 'ADH' . strtoupper(substr(uniqid(),5)) . rand(100,999);
 
-    // Group by seller — create one order per seller for simplicity
     $sellers = [];
     foreach($cart_items as $ci) {
         $s = $ci['seller_email'];
@@ -28,37 +39,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
         $sellers[$s][] = $ci;
     }
 
-    $name    = trim($_POST['s_name']);
-    $phone   = trim($_POST['s_phone']);
-    $addr    = trim($_POST['s_address']);
-    $city    = trim($_POST['s_city']);
-    $state   = trim($_POST['s_state']);
-    $pin     = trim($_POST['s_pincode']);
-    $payment = in_array($_POST['payment'],['cod','upi','card']) ? $_POST['payment'] : 'cod';
+    $name    = trim($_POST['s_name']    ?? '');
+    $phone   = trim($_POST['s_phone']   ?? '');
+    $addr    = trim($_POST['s_address'] ?? '');
+    $city    = trim($_POST['s_city']    ?? '');
+    $state   = trim($_POST['s_state']   ?? '');
+    $pin     = trim($_POST['s_pincode'] ?? '');
+    $payment = in_array($_POST['payment']??'',['cod','upi','card']) ? $_POST['payment'] : 'cod';
 
-    foreach($sellers as $seller_email => $s_items) {
-        $seller_total = 0;
-        foreach($s_items as $si) $seller_total += $si['price'] * $si['quantity'];
-        $seller_total += (count($sellers)===1) ? $shipping : 0;
-        $s_order_no = $order_no.(count($sellers)>1?'_'.strtolower(substr($seller_email,0,4)):'');
+    /* ── DB Transaction ── */
+    $conn->begin_transaction();
+    try {
+        foreach($sellers as $seller_email => $s_items) {
+            $seller_total = 0;
+            foreach($s_items as $si) $seller_total += $si['price'] * $si['quantity'];
+            $seller_total += (count($sellers)===1) ? $shipping : 0;
+            $s_order_no = $order_no . (count($sellers)>1 ? '_'.strtolower(substr($seller_email,0,4)) : '');
 
-        // Move payment_method into the parameter list — no interpolation in SQL
-        $oq = $conn->prepare("INSERT INTO orders (order_number,buyer_email,seller_email,total_amount,shipping_name,shipping_phone,shipping_address,shipping_city,shipping_state,shipping_pincode,payment_method,order_status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,'placed',NOW())");
-        $oq->bind_param("sssdsssssss",$s_order_no,$me,$seller_email,$seller_total,$name,$phone,$addr,$city,$state,$pin,$payment);
-        $oq->execute();
-        $order_id = $conn->insert_id;
+            $oq = $conn->prepare("INSERT INTO orders (order_number,buyer_email,seller_email,total_amount,shipping_name,shipping_phone,shipping_address,shipping_city,shipping_state,shipping_pincode,payment_method,order_status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,'placed',NOW())");
+            $oq->bind_param("sssdsssssss",$s_order_no,$me,$seller_email,$seller_total,$name,$phone,$addr,$city,$state,$pin,$payment);
+            $oq->execute();
+            $order_id = $conn->insert_id;
 
-        foreach($s_items as $si) {
-            $iq = $conn->prepare("INSERT INTO order_items (order_id,product_id,product_name,price,quantity,image) VALUES (?,?,?,?,?,?)");
-            $iq->bind_param("iisdis",$order_id,$si['product_id'],$si['pname'],$si['price'],$si['quantity'],$si['image1']);
-            $iq->execute();
-            $conn->query("UPDATE products SET stock=stock-".(int)$si['quantity'].", total_sold=total_sold+".(int)$si['quantity']." WHERE id=".(int)$si['product_id']." AND stock>=".(int)$si['quantity']);
+            foreach($s_items as $si) {
+                $iq = $conn->prepare("INSERT INTO order_items (order_id,product_id,product_name,price,quantity,image) VALUES (?,?,?,?,?,?)");
+                $iq->bind_param("iisdis",$order_id,$si['product_id'],$si['pname'],$si['price'],$si['quantity'],$si['image1']);
+                $iq->execute();
+
+                /* ── Stock decrement with check ── */
+                $upd = $conn->prepare("UPDATE products SET stock=stock-?, total_sold=total_sold+? WHERE id=? AND stock>=?");
+                $upd->bind_param("iiii",$si['quantity'],$si['quantity'],$si['product_id'],$si['quantity']);
+                $upd->execute();
+                if ($upd->affected_rows === 0) {
+                    throw new RuntimeException("Stock unavailable for: " . $si['pname']);
+                }
+            }
         }
+
+        /* ── Clear cart ── */
+        $clr = $conn->prepare("DELETE FROM cart WHERE user_email=?");
+        $clr->bind_param("s", $me);
+        $clr->execute();
+
+        $conn->commit();
+
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log("[checkout] Transaction failed: " . $e->getMessage());
+        $_SESSION['checkout_error'] = 'Order failed: ' . htmlspecialchars($e->getMessage()) . '. Please try again.';
+        header("Location: cart.php?error=stock"); exit;
     }
-    // Clear cart — proper MySQLi syntax
-    $clr = $conn->prepare("DELETE FROM cart WHERE user_email=?");
-    $clr->bind_param("s", $me);
-    $clr->execute();
 
     // ── Email notifications ─────────────────────────────────
     require_once __DIR__ . '/../config/mail.php';

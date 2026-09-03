@@ -340,7 +340,7 @@ class AdhaarAI {
         $email = mysqli_real_escape_string($this->conn, $seller_email);
         $product_count = (int)$this->conn->query("SELECT COUNT(*) c FROM products WHERE seller_email='$email'")->fetch_assoc()['c'];
         $pending_orders = (int)$this->conn->query("SELECT COUNT(*) c FROM orders WHERE seller_email='$email' AND order_status IN ('placed','packed','shipped')")->fetch_assoc()['c'];
-        $low_stock = (int)$this->conn->query("SELECT COUNT(*) c FROM products WHERE seller_email='$email' AND stock_quantity <= 5 AND is_active=1")->fetch_assoc()['c'];
+        $low_stock = (int)$this->conn->query("SELECT COUNT(*) c FROM products WHERE seller_email='$email' AND stock <= 5 AND is_active=1")->fetch_assoc()['c'];
         $top_cat = $this->conn->query("SELECT category, COUNT(*) c FROM products WHERE seller_email='$email' GROUP BY category ORDER BY c DESC LIMIT 1")->fetch_assoc();
 
         $recs = [];
