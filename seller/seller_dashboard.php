@@ -53,7 +53,7 @@ $fraud_flags=[]; $sentiment=[]; $pricing=[];
 foreach(array_slice($orders,0,10) as $o){
   try{
     $oid=(int)$o['id'];
-    $f = ai_cached("seller_fraud_{$oid}", 600, fn() use($ai,$oid)=> $ai->detectOrderFraud($oid));
+    $f = ai_cached("seller_fraud_{$oid}", 600, fn()=> $ai->detectOrderFraud($oid));
     if(($f['risk']??'low')!=='low') $fraud_flags[$o['id']]=$f;
   }catch(Throwable $e){}
 }
@@ -61,13 +61,13 @@ foreach(array_slice($products,0,5) as $p){
   try{
     $pid=(int)$p['id'];
     if((int)($p['rev_count']??0)>0)
-      $sentiment[$p['id']] = ai_cached("seller_sent_{$pid}", 600, fn() use($ai,$pid)=> $ai->analyzeReviewSentiment($pid));
+      $sentiment[$p['id']] = ai_cached("seller_sent_{$pid}", 600, fn()=> $ai->analyzeReviewSentiment($pid));
   }catch(Throwable $e){}
 }
 foreach(array_slice($products,0,5) as $p){
   try{
     $pid=(int)$p['id'];
-    $pricing[$p['id']] = ai_cached("seller_price_{$pid}", 300, fn() use($ai,$pid)=> $ai->suggestPricing($pid));
+    $pricing[$p['id']] = ai_cached("seller_price_{$pid}", 300, fn()=> $ai->suggestPricing($pid));
   }catch(Throwable $e){}
 }
 $tab=$_GET['tab']??'overview'; $success=$_GET['success']??''; $err=$_GET['err']??'';

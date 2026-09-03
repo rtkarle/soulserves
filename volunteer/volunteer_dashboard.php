@@ -87,7 +87,7 @@ foreach($assigned as $d){
         $dtype = $d['type']==='Food'?'food':'cloth';
         $etas[$d['id'].'_'.$dtype] = ai_cached(
             "vol_eta_{$d['id']}_{$dtype}", 180,
-            fn() use($ai,$d,$dtype)=> $ai->predictETA((int)$d['id'], $dtype)
+            fn()=> $ai->predictETA((int)$d['id'], $dtype)
         );
     }catch(Throwable $e){}
 }

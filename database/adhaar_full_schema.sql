@@ -322,3 +322,60 @@ INSERT IGNORE INTO admins (name, email, password, created_at)
 VALUES ('Adhaar Admin', 'admin@adhaar.com',
         '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', NOW());
 -- default password: password (change immediately in production)
+
+-- ============================================================
+-- Auxiliary tables (AI engine, badges, search/view history)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS ai_logs (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    action_type VARCHAR(80) NOT NULL,
+    input_data TEXT,
+    output_data TEXT,
+    confidence FLOAT DEFAULT 0,
+    triggered_by VARCHAR(180) DEFAULT 'system',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_action (action_type),
+    INDEX idx_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS product_search_history (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_email VARCHAR(180) NOT NULL,
+    query VARCHAR(255) NOT NULL,
+    category VARCHAR(60) DEFAULT NULL,
+    result_count INT DEFAULT 0,
+    searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_email),
+    INDEX idx_searched (searched_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS product_view_history (
+    user_email VARCHAR(180) NOT NULL,
+    product_id INT UNSIGNED NOT NULL,
+    view_count INT DEFAULT 1,
+    last_viewed TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_email, product_id),
+    INDEX idx_product (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS donor_badges (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    donor_email VARCHAR(180) NOT NULL,
+    badge_key VARCHAR(60) NOT NULL,
+    badge_name VARCHAR(100) NOT NULL,
+    badge_emoji VARCHAR(10) DEFAULT '🏅',
+    earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_badge (donor_email, badge_key),
+    INDEX idx_donor (donor_email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS ngo_profiles (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(180) NOT NULL,
+    email VARCHAR(180) UNIQUE,
+    city VARCHAR(100),
+    state VARCHAR(100),
+    capacity_daily INT DEFAULT 50,
+    is_verified TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
