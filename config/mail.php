@@ -1,46 +1,34 @@
 <?php
 /* ── Load PHPMailer — composer autoload preferred, local fallback for XAMPP ── */
+$_phpmailer_loaded = false;
 if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
     require_once __DIR__ . '/../vendor/autoload.php';
+    $_phpmailer_loaded = true;
 } elseif (file_exists(__DIR__ . '/../PHPMailer/src/PHPMailer.php')) {
     require_once __DIR__ . '/../PHPMailer/src/Exception.php';
     require_once __DIR__ . '/../PHPMailer/src/PHPMailer.php';
     require_once __DIR__ . '/../PHPMailer/src/SMTP.php';
+    $_phpmailer_loaded = true;
 } else {
-    /* PHPMailer missing — define stubs so the app doesn't 500 */
     error_log('PHPMailer not found — emails will be silently skipped.');
-    if (!function_exists('sendMail')) {
-        function sendMail(string $to, string $subject, string $body): bool { return false; }
-    }
-    if (!function_exists('sendOTPMail'))          { function sendOTPMail(string $to, string $otp): bool { return false; } }
-    if (!function_exists('sendStatusNotification')){ function sendStatusNotification(...$a): bool { return false; } }
-    if (!function_exists('sendWelcomeMail'))       { function sendWelcomeMail(...$a): bool { return false; } }
-    if (!function_exists('sendDonationReceived'))  { function sendDonationReceived(...$a): bool { return false; } }
-    if (!function_exists('sendOrderConfirmation')) { function sendOrderConfirmation(...$a): bool { return false; } }
-    if (!function_exists('sendSellerOrderAlert'))  { function sendSellerOrderAlert(...$a): bool { return false; } }
-    if (!function_exists('sendOrderStatusUpdate')) { function sendOrderStatusUpdate(...$a): bool { return false; } }
-    if (!function_exists('sendVolunteerWelcome'))  { function sendVolunteerWelcome(...$a): bool { return false; } }
-    if (!function_exists('sendSellerVerified'))    { function sendSellerVerified(...$a): bool { return false; } }
-    if (!function_exists('sendAdminContactAlert')) { function sendAdminContactAlert(...$a): bool { return false; } }
-    return; /* stop rest of file from executing */
 }
-
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
 
 if (!defined('MAIL_USERNAME')) {
     require_once __DIR__ . '/config.php';
 }
 
 function sendMail(string $to, string $subject, string $body): bool {
-    $mail = new PHPMailer(true);
+    global $_phpmailer_loaded;
+    if (!$_phpmailer_loaded) return false;   /* no crash — silent skip */
+
+    $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
     try {
         $mail->isSMTP();
         $mail->Host       = MAIL_HOST;
         $mail->SMTPAuth   = true;
         $mail->Username   = MAIL_USERNAME;
         $mail->Password   = MAIL_PASSWORD;
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
         $mail->Port       = MAIL_PORT;
         $mail->setFrom(MAIL_FROM, MAIL_FROM_NAME);
         $mail->addAddress($to);
@@ -50,7 +38,7 @@ function sendMail(string $to, string $subject, string $body): bool {
         $mail->AltBody = strip_tags(str_replace(['<br>','<br/>'], "\n", $body));
         $mail->send();
         return true;
-    } catch (Exception $e) {
+    } catch (\Exception $e) {
         error_log("Mailer Error to $to: " . $mail->ErrorInfo);
         return false;
     }

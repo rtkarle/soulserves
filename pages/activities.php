@@ -24,20 +24,12 @@ try {
     if ($chk && $chk->num_rows > 0) {
         $eq = $conn->query(
             "SELECT id, title, content, category, emoji, image, event_date, created_at
-             FROM events_news
-             WHERE is_published = 1
-             ORDER BY created_at DESC
-             LIMIT 20"
+             FROM events_news WHERE is_published = 1
+             ORDER BY created_at DESC LIMIT 20"
         );
         if ($eq) $events_rows = $eq->fetch_all(MYSQLI_ASSOC);
     }
 } catch (Throwable $e) { $events_rows = []; }
-
-// ── Live stats — safe wrappers ───────────────────────────────
-function safe_count($conn, string $sql): int {
-    try { $r = $conn->query($sql); return $r ? (int)$r->fetch_assoc()['c'] : 0; }
-    catch (Throwable $e) { return 0; }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
