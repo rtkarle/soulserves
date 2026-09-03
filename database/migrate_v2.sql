@@ -7,10 +7,13 @@
 USE adhaar_db;
 
 -- ── 1. register: ensure seller role works ────────────────────
---    Column is varchar(20) — 'seller' fits fine.
---    Add profile_photo if missing.
-ALTER TABLE register
-  ADD COLUMN IF NOT EXISTS profile_photo VARCHAR(300) DEFAULT NULL AFTER verified;
+--    Add profile_photo if missing (safe check)
+SET @col_exists = (SELECT COUNT(*) FROM information_schema.COLUMNS 
+    WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='register' AND COLUMN_NAME='profile_photo');
+SET @sql = IF(@col_exists=0, 
+    'ALTER TABLE register ADD COLUMN profile_photo VARCHAR(300) DEFAULT NULL AFTER verified',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ── 2. cloth_donations: fix is_clean type ────────────────────
 ALTER TABLE cloth_donations

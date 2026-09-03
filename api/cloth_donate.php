@@ -44,8 +44,13 @@ $new_id = (int)$conn->insert_id;
 $donation_id = 'DON-CLO-' . str_pad($new_id, 6, '0', STR_PAD_LEFT);
 
 /* ── Add donation_id column if not yet present ── */
-$conn->query("ALTER TABLE cloth_donations ADD COLUMN IF NOT EXISTS donation_id VARCHAR(30) DEFAULT NULL AFTER id");
-$conn->query("ALTER TABLE cloth_donations ADD UNIQUE KEY IF NOT EXISTS uq_cloth_don_id (donation_id)");
+try {
+    $col_check = $conn->query("SHOW COLUMNS FROM cloth_donations LIKE 'donation_id'");
+    if ($col_check && $col_check->num_rows === 0) {
+        $conn->query("ALTER TABLE cloth_donations ADD COLUMN donation_id VARCHAR(30) DEFAULT NULL AFTER id");
+        $conn->query("ALTER TABLE cloth_donations ADD UNIQUE KEY uq_cloth_don_id (donation_id)");
+    }
+} catch (Throwable $e) { /* column may already exist — safe to ignore */ }
 
 $upd = $conn->prepare("UPDATE cloth_donations SET donation_id=? WHERE id=?");
 $upd->bind_param("si", $donation_id, $new_id);
