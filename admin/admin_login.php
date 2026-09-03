@@ -2,24 +2,40 @@
 // ── Handles both GET (render form) and POST (process login) ──
 require_once __DIR__ . '/../config/db.php';
 
+/* ── Auto-create admins table if missing (Render fresh deploy) ── */
+try {
+    $conn->query("CREATE TABLE IF NOT EXISTS admins (
+        id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        name       VARCHAR(120) NOT NULL,
+        email      VARCHAR(180) NOT NULL UNIQUE,
+        password   VARCHAR(255) NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch (Throwable $e) { /* non-fatal */ }
+
 // POST: process login
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
 
     $email = trim($_POST['email']    ?? '');
-    $pass  = trim($_POST['password'] ?? '');
+    $pass  = $_POST['password'] ?? '';   /* never trim passwords */
 
     if (!$email || !$pass) {
         header("Location: admin_login.php?error=1"); exit;
     }
 
-    $stmt = $conn->prepare("SELECT * FROM admins WHERE email=?");
-    $stmt->bind_param("s", $email);
-    $stmt->execute();
-    $admin = $stmt->get_result()->fetch_assoc();
+    $admin = null;
+    try {
+        $stmt = $conn->prepare("SELECT * FROM admins WHERE email=?");
+        $stmt->bind_param("s", $email);
+        $stmt->execute();
+        $admin = $stmt->get_result()->fetch_assoc();
+    } catch (Throwable $e) {
+        error_log("Admin login DB error: " . $e->getMessage());
+        header("Location: admin_login.php?error=1"); exit;
+    }
 
     if ($admin && password_verify($pass, $admin['password'])) {
-        // Regenerate session ID on login — prevents session fixation
         session_regenerate_id(true);
         $_SESSION['admin_id']    = $admin['id'];
         $_SESSION['admin_email'] = $admin['email'];

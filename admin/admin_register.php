@@ -1,16 +1,26 @@
 <?php
 require_once __DIR__ . '/../config/db.php';
 
+/* ── Auto-create admins table if missing (Render fresh deploy) ── */
+try {
+    $conn->query("CREATE TABLE IF NOT EXISTS admins (
+        id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        name       VARCHAR(120) NOT NULL,
+        email      VARCHAR(180) NOT NULL UNIQUE,
+        password   VARCHAR(255) NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch (Throwable $e) { /* non-fatal */ }
+
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
-    $name  = trim($_POST['name']     ?? '');
-    $email = trim($_POST['email']    ?? '');
-    $pass  = trim($_POST['password'] ?? '');
-    $conf  = trim($_POST['confirm']  ?? '');
+    $name   = trim($_POST['name']       ?? '');
+    $email  = trim($_POST['email']      ?? '');
+    $pass   = $_POST['password']        ?? '';   /* never trim passwords */
+    $conf   = $_POST['confirm']         ?? '';
     $secret = trim($_POST['secret_key'] ?? '');
 
-    // Simple shared secret to prevent open admin registration
     if ($secret !== 'ADHAAR_ADMIN_2026') {
         $error = 'Invalid admin secret key.';
     } elseif (!$name || !$email || !$pass) {
@@ -22,16 +32,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Invalid email address.';
     } else {
-        $chk = $conn->prepare("SELECT id FROM admins WHERE email=?");
-        $chk->bind_param("s", $email); $chk->execute();
-        if ($chk->get_result()->num_rows > 0) {
-            $error = 'An admin with this email already exists.';
-        } else {
-            $hash = password_hash($pass, PASSWORD_DEFAULT);
-            $ins  = $conn->prepare("INSERT INTO admins(name,email,password,created_at) VALUES(?,?,?,NOW())");
-            $ins->bind_param("sss", $name, $email, $hash);
-            $ins->execute();
-            header("Location: admin_login.php?registered=1"); exit;
+        try {
+            $chk = $conn->prepare("SELECT id FROM admins WHERE email=?");
+            $chk->bind_param("s", $email); $chk->execute();
+            if ($chk->get_result()->num_rows > 0) {
+                $error = 'An admin with this email already exists.';
+            } else {
+                $hash = password_hash($pass, PASSWORD_DEFAULT);
+                $ins  = $conn->prepare("INSERT INTO admins(name,email,password,created_at) VALUES(?,?,?,NOW())");
+                $ins->bind_param("sss", $name, $email, $hash);
+                $ins->execute();
+                header("Location: admin_login.php?registered=1"); exit;
+            }
+        } catch (Throwable $e) {
+            error_log("Admin register DB error: " . $e->getMessage());
+            $error = 'Database error. Please try again.';
         }
     }
 }
