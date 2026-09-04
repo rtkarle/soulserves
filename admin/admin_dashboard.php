@@ -72,6 +72,37 @@ if ($settlements_exist) {
 
 // ── Paginated queries ─────────────────────────────────────────────────────
 $per = 20;
+// ── Unified Donations
+$donations_table_exists = table_exists($conn, 'donations');
+$dp = max(1,(int)($_GET['dp']??1));
+$donations_rows = [];
+$donations_total = 0;
+$donations_pages = 1;
+$don_cat_filter = $_GET['don_cat'] ?? 'all';
+$don_status_filter = $_GET['don_status'] ?? 'all';
+$allowed_don_cats = ['food','clothes','study_material','school_supplies','toys','medicines','electronics','furniture','other'];
+$allowed_don_statuses = ['pending','accepted','rejected','scheduled','out_for_pickup','picked_up','delivered'];
+if (!in_array($don_cat_filter, $allowed_don_cats, true)) $don_cat_filter = 'all';
+if (!in_array($don_status_filter, $allowed_don_statuses, true)) $don_status_filter = 'all';
+
+if ($donations_table_exists) {
+    $don_where = '1=1';
+    if ($don_cat_filter !== 'all') $don_where .= " AND category='" . mysqli_real_escape_string($conn,$don_cat_filter) . "'";
+    if ($don_status_filter !== 'all') $don_where .= " AND status='" . mysqli_real_escape_string($conn,$don_status_filter) . "'";
+    $donations_total = (int)$conn->query("SELECT COUNT(*) c FROM donations WHERE $don_where")->fetch_assoc()['c'];
+    $donations_pages = max(1, (int)ceil($donations_total / $per));
+    $dq = $conn->query("SELECT * FROM donations WHERE $don_where ORDER BY created_at DESC LIMIT $per OFFSET " . (($dp-1)*$per));
+    $donations_rows = $dq ? $dq->fetch_all(MYSQLI_ASSOC) : [];
+}
+$stats['donations_total']   = $donations_total;
+$stats['donations_pending']  = $donations_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM donations WHERE status='pending'")->fetch_assoc()['c'] : 0;
+$stats['donations_delivered']= $donations_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM donations WHERE status='delivered'")->fetch_assoc()['c'] : 0;
+$stats['pending_don'] += $stats['donations_pending'];
+
+$don_cat_icons = [
+    'food'=>'🍱','clothes'=>'👕','study_material'=>'📚','school_supplies'=>'🎒',
+    'toys'=>'🧸','medicines'=>'💊','electronics'=>'📱','furniture'=>'🪑','other'=>'📦'
+];
 $fp  = max(1,(int)($_GET['fp']??1));
 $cp  = max(1,(int)($_GET['cp']??1));
 $food = $food_table_exists ? $conn->query("SELECT * FROM food_donations ORDER BY created_at DESC LIMIT $per OFFSET ".(($fp-1)*$per)) : false;
@@ -374,11 +405,14 @@ body{ background:var(--bg); color:var(--text); min-height:100vh; }
   <button class="nav-item <?=$tab==='overview'?'active':''?>" onclick="sw('overview',this)">📊 Overview</button>
 
   <div class="nav-sec">Donations</div>
+  <button class="nav-item <?=$tab==='donations'?'active':''?>" onclick="sw('donations',this)">
+    🎁 All Donations<?php if($stats['donations_pending']>0):?><span class="nav-badge"><?=$stats['donations_pending']?></span><?php endif;?>
+  </button>
   <button class="nav-item <?=$tab==='food'?'active':''?>" onclick="sw('food',this)">
-    🍲 Food Donations<?php if($stats['food_pending']>0):?><span class="nav-badge"><?=$stats['food_pending']?></span><?php endif;?>
+    🍲 Food<?php if($stats['food_pending']>0):?><span class="nav-badge"><?=$stats['food_pending']?></span><?php endif;?>
   </button>
   <button class="nav-item <?=$tab==='cloth'?'active':''?>" onclick="sw('cloth',this)">
-    👕 Cloth Donations<?php if($stats['cloth_pending']>0):?><span class="nav-badge"><?=$stats['cloth_pending']?></span><?php endif;?>
+    👕 Clothes<?php if($stats['cloth_pending']>0):?><span class="nav-badge"><?=$stats['cloth_pending']?></span><?php endif;?>
   </button>
   <a href="distribution_system.php" class="nav-item">🚚 Distribution</a>
 
@@ -431,6 +465,7 @@ body{ background:var(--bg); color:var(--text); min-height:100vh; }
       <div class="wb-date"><?=date('l, d F Y')?></div>
     </div>
     <div class="wb-actions">
+      <button class="wb-btn white" onclick="sw('donations',document.querySelector('[onclick*=\'donations\']'))">🎁 All Donations</button>
       <button class="wb-btn white" onclick="sw('food',document.querySelector('[onclick*=\'food\']'))">🍲 Food Queue</button>
       <button class="wb-btn white" onclick="sw('cloth',document.querySelector('[onclick*=\'cloth\']'))">👕 Cloth Queue</button>
       <a href="distribution_system.php" class="wb-btn outline">🚚 Distribution</a>
@@ -451,6 +486,13 @@ body{ background:var(--bg); color:var(--text); min-height:100vh; }
       <div class="kpi-value"><?=$stats['pending_don']?></div>
       <div class="kpi-sub">Donations awaiting action</div>
       <?php if($stats['pending_don']>0):?><span class="kpi-badge warn">⚠ Needs attention</span><?php endif;?>
+    </div>
+    <div class="kpi olive">
+      <div class="kpi-bg">🎁</div>
+      <div class="kpi-label">All Donations</div>
+      <div class="kpi-value"><?=$stats['donations_total']?></div>
+      <div class="kpi-sub"><?=$stats['donations_delivered']?> delivered · <?=$stats['donations_pending']?> pending</div>
+      <?php if($stats['donations_pending']>0):?><span class="kpi-badge warn">⚠ Needs action</span><?php endif;?>
     </div>
     <div class="kpi olive">
       <div class="kpi-bg">🍱</div>
@@ -559,6 +601,7 @@ body{ background:var(--bg); color:var(--text); min-height:100vh; }
     <div class="chart-card">
       <h4>🚀 Quick Actions</h4>
       <div class="quick-grid">
+        <button class="quick-btn" onclick="sw('donations',document.querySelector('[onclick*=\'donations\']'))"><span class="qi">🎁</span>Donations</button>
         <button class="quick-btn" onclick="sw('food',document.querySelector('[onclick*=\'food\']'))"><span class="qi">🍲</span>Food</button>
         <button class="quick-btn" onclick="sw('cloth',document.querySelector('[onclick*=\'cloth\']'))"><span class="qi">👕</span>Cloth</button>
         <a href="distribution_system.php" class="quick-btn"><span class="qi">🚚</span>Distribute</a>
@@ -589,6 +632,141 @@ header('Content-Type: text/html; charset=utf-8');
       </div>
     </div>
   </div>
+</div>
+
+
+<!-- ══════════════════ ALL DONATIONS TAB (Unified) ══════════════════ -->
+<div id="tab-donations" class="tab-panel <?=$tab==='donations'?'active':''?>">
+  <div class="sec-head" style="flex-wrap:wrap;gap:12px">
+    <h3>🎁 All Donations <span class="sec-count"><?=$stats['donations_total']?> total</span></h3>
+    <span class="sec-meta">
+      Pending: <strong style="color:#d97706"><?=$stats['donations_pending']?></strong> &nbsp;·&nbsp;
+      Delivered: <strong style="color:#059669"><?=$stats['donations_delivered']?></strong>
+    </span>
+    <!-- Filters -->
+    <form method="GET" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-left:auto">
+      <input type="hidden" name="tab" value="donations">
+      <select name="don_cat" onchange="this.form.submit()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:#fff;cursor:pointer">
+        <option value="all" <?=$don_cat_filter==='all'?'selected':''?>>All Categories</option>
+        <?php foreach($don_cat_icons as $key=>$icon): ?>
+        <option value="<?=$key?>" <?=$don_cat_filter===$key?'selected':''?>><?=$icon?> <?=ucfirst(str_replace('_',' ',$key))?></option>
+        <?php endforeach; ?>
+      </select>
+      <select name="don_status" onchange="this.form.submit()" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;background:#fff;cursor:pointer">
+        <option value="all" <?=$don_status_filter==='all'?'selected':''?>>All Statuses</option>
+        <?php foreach(['pending','accepted','scheduled','out_for_pickup','picked_up','delivered','rejected'] as $st): ?>
+        <option value="<?=$st?>" <?=$don_status_filter===$st?'selected':''?>><?=ucfirst(str_replace('_',' ',$st))?></option>
+        <?php endforeach; ?>
+      </select>
+    </form>
+  </div>
+
+  <?php if(empty($donations_rows)): ?>
+  <div style="text-align:center;padding:48px 24px;color:var(--muted)">
+    <div style="font-size:48px;margin-bottom:14px">📭</div>
+    <p>No donations found<?=$don_cat_filter!=='all'?' for '.ucfirst(str_replace('_',' ',$don_cat_filter)):''?>.</p>
+  </div>
+  <?php else: ?>
+  <div class="table-wrap"><div class="table-scroll"><table>
+    <thead>
+      <tr>
+        <th>ID</th><th>Category</th><th>Donor</th><th>Qty</th><th>Description</th>
+        <th>Pickup Address</th><th>Contact</th><th>Priority</th><th>Photo</th><th>Status</th><th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+    <?php foreach($donations_rows as $d):
+      $cat_icon = $don_cat_icons[$d['category']] ?? '📦';
+      $pri = $d['priority'] ?? 'medium';
+      $pri_icons = ['high'=>'🔴','medium'=>'🟡','low'=>'🟢'];
+    ?>
+    <tr>
+      <td style="font-weight:700;color:var(--muted);font-size:11px;white-space:nowrap">
+        <?=htmlspecialchars($d['donation_id'] ?? 'DON-'.str_pad($d['id'],6,'0',STR_PAD_LEFT))?>
+      </td>
+      <td><span style="background:#f0ede5;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap">
+        <?=$cat_icon?> <?=ucfirst(str_replace('_',' ',$d['category']))?>
+      </span></td>
+      <td><div style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?=htmlspecialchars($d['donor_email'])?></div></td>
+      <td><strong><?=htmlspecialchars($d['quantity']??'—')?></strong></td>
+      <td><div style="font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?=htmlspecialchars(mb_substr($d['description']??'—',0,50))?></div></td>
+      <td><div style="font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?=htmlspecialchars($d['pickup_address']??'—')?></div></td>
+      <td style="font-size:12px"><?=htmlspecialchars($d['contact']??'—')?></td>
+      <td><span class="pri <?=$pri?>"><?=$pri_icons[$pri]??'🟡'?> <?=ucfirst($pri)?></span></td>
+      <td><?php if(!empty($d['image'])): ?><img src="<?=htmlspecialchars(image_url($d['image']))?>" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px"><?php else: ?>—<?php endif; ?></td>
+      <td><span class="pill <?=htmlspecialchars($d['status'])?>"><?=ucfirst(str_replace('_',' ',$d['status']))?></span></td>
+      <td style="min-width:160px">
+        <?php if($d['status']==='pending'): ?>
+          <form style="display:inline" method="POST" action="../api/update_status.php">
+            <?=csrf_field()?>
+            <input type="hidden" name="id"    value="<?=(int)$d['id']?>">
+            <input type="hidden" name="table" value="donations">
+            <input type="hidden" name="status" value="accepted">
+            <button class="btn btn-accept">✓ Accept</button>
+          </form>
+          <form style="display:inline" method="POST" action="../api/update_status.php">
+            <?=csrf_field()?>
+            <input type="hidden" name="id"    value="<?=(int)$d['id']?>">
+            <input type="hidden" name="table" value="donations">
+            <input type="hidden" name="status" value="rejected">
+            <button class="btn btn-reject">✗ Reject</button>
+          </form>
+        <?php elseif($d['status']==='accepted'): ?>
+          <form method="POST" action="../api/update_status.php">
+            <?=csrf_field()?>
+            <input type="hidden" name="id"    value="<?=(int)$d['id']?>">
+            <input type="hidden" name="table" value="donations">
+            <input type="hidden" name="status" value="scheduled">
+            <div class="schedule-inputs">
+              <input type="date"  name="pickup_date" required>
+              <input type="text"  name="pickup_time" placeholder="e.g. 10 AM – 12 PM" required>
+              <input type="email" name="volunteer_email" placeholder="Volunteer email" required>
+              <button class="btn btn-schedule">📅 Schedule</button>
+            </div>
+          </form>
+        <?php elseif($d['status']==='scheduled'): ?>
+          <form style="display:inline" method="POST" action="../api/update_status.php">
+            <?=csrf_field()?>
+            <input type="hidden" name="id"    value="<?=(int)$d['id']?>">
+            <input type="hidden" name="table" value="donations">
+            <input type="hidden" name="status" value="out_for_pickup">
+            <button class="btn btn-pickup">🚚 Out for Pickup</button>
+          </form>
+        <?php elseif($d['status']==='out_for_pickup'): ?>
+          <form style="display:inline" method="POST" action="../api/update_status.php">
+            <?=csrf_field()?>
+            <input type="hidden" name="id"    value="<?=(int)$d['id']?>">
+            <input type="hidden" name="table" value="donations">
+            <input type="hidden" name="status" value="picked_up">
+            <button class="btn btn-done">📦 Mark Picked</button>
+          </form>
+        <?php elseif($d['status']==='picked_up'): ?>
+          <form style="display:inline" method="POST" action="../api/update_status.php">
+            <?=csrf_field()?>
+            <input type="hidden" name="id"    value="<?=(int)$d['id']?>">
+            <input type="hidden" name="table" value="donations">
+            <input type="hidden" name="status" value="delivered">
+            <button class="btn btn-accept">✅ Delivered</button>
+          </form>
+        <?php else: ?>
+          <span style="color:var(--muted);font-size:12px">—</span>
+        <?php endif; ?>
+      </td>
+    </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table></div></div>
+
+  <?php if($donations_pages>1): ?>
+  <div class="pagination">
+    <a href="?tab=donations&dp=<?=max(1,$dp-1)?>&don_cat=<?=$don_cat_filter?>&don_status=<?=$don_status_filter?>" class="page-btn <?=$dp<=1?'disabled':''?>">← Prev</a>
+    <?php for($pg=max(1,$dp-2);$pg<=min($donations_pages,$dp+2);$pg++): ?>
+    <a href="?tab=donations&dp=<?=$pg?>&don_cat=<?=$don_cat_filter?>&don_status=<?=$don_status_filter?>" class="page-btn <?=$pg===$dp?'active':''?>"><?=$pg?></a>
+    <?php endfor; ?>
+    <a href="?tab=donations&dp=<?=min($donations_pages,$dp+1)?>&don_cat=<?=$don_cat_filter?>&don_status=<?=$don_status_filter?>" class="page-btn <?=$dp>=$donations_pages?'disabled':''?>">Next →</a>
+  </div>
+  <?php endif; ?>
+  <?php endif; ?>
 </div>
 
 <!-- ══════════════════ FOOD DONATIONS TAB ══════════════════ -->
@@ -1093,33 +1271,6 @@ function openEditModal(ev) {
     </tbody>
   </table></div></div>
 </div>
-
-
-/* ── Tab switch ── */
-function sw(name, btn) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-  const panel = document.getElementById('tab-' + name);
-  if (panel) panel.classList.add('active');
-  if (btn)   btn.classList.add('active');
-  history.replaceState(null, '', '?tab=' + name);
-  // Animate bars in newly visible tab
-  setTimeout(() => animateBars('#tab-' + name + ' .bar-fill'), 50);
-}
-
-/* ── Animate bar fills ── */
-function animateBars(sel) {
-  document.querySelectorAll(sel).forEach(b => {
-    const target = b.getAttribute('data-w') || '0%';
-    b.style.width = '0';
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => { b.style.width = target; });
-    });
-  });
-}
-// Animate on initial load
-document.addEventListener('DOMContentLoaded', () => animateBars('.bar-fill'));
-</script>
 
 <!-- ══════════════════ AI INSIGHTS TAB ══════════════════ -->
 <div id="tab-ai" class="tab-panel <?=$tab==='ai'?'active':''?>">

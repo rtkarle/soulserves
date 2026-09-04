@@ -24,7 +24,7 @@ $status = trim($_POST['status'] ?? '');
 $table  = trim($_POST['table']  ?? 'food_donations');
 
 $allowed_statuses = ['accepted','rejected','scheduled','out_for_pickup','picked_up','delivered'];
-$allowed_tables   = ['food_donations','cloth_donations'];
+$allowed_tables   = ['food_donations','cloth_donations','donations'];
 
 if (!$id || !in_array($status, $allowed_statuses) || !in_array($table, $allowed_tables)) {
     http_response_code(400);
@@ -41,7 +41,7 @@ if (!$row) {
 
 $donorEmail      = $row['donor_email']    ?? '';
 $volunteerEmail  = $row['volunteer_email'] ?? ($_SESSION['user_email'] ?? '');
-$donationType    = ($table === 'food_donations') ? 'food' : 'cloth';
+$donationType    = ($table === 'food_donations') ? 'food' : ($table === 'cloth_donations' ? 'cloth' : 'donation');
 $details         = [];
 $proof_image_url = null;  // absolute URL for email embedding
 
