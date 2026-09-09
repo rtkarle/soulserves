@@ -174,18 +174,48 @@ if (!empty($_FILES['image']['name'])) {
 try {
     $stmt = $conn->prepare(
         "INSERT INTO donations
-         (donor_email,category,quantity,description,condition_type,pickup_address,
-          contact,pickup_date,image,status,notes,priority,food_time,safe_hours,
-          cloth_type,is_clean,subject_grade,book_count,expiry_date,medicine_type,
-          device_type,working_status,created_at)
+         (donor_email, category, quantity, description, condition_type, pickup_address,
+          contact, pickup_date, image, status, notes, priority, food_time, safe_hours,
+          cloth_type, is_clean, subject_grade, book_count, expiry_date, medicine_type,
+          device_type, working_status, created_at)
          VALUES (?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,NOW())"
     );
+    // 21 ? placeholders → 21 variables → type string = 21 chars
+    // s=donor_email, s=category, s=quantity, s=description, s=condition_type,
+    // s=pickup_address, s=contact, s=pickup_date, s=image,
+    // (status = 'pending' — hardcoded, no ?)
+    // s=notes, s=priority, s=food_time, i=safe_hours,
+    // s=cloth_type, i=is_clean, s=subject_grade, i=book_count,
+    // s=expiry_date, s=medicine_type, s=device_type, s=working_status
+    // (created_at = NOW() — hardcoded, no ?)
+    // Use all-string binding — MySQL auto-casts to INT where needed
+    $safe_hours_s    = $safe_hours    !== null ? (string)(int)$safe_hours    : null;
+    $is_clean_s      = (string)(int)$is_clean;
+    $book_count_s    = $book_count    !== null ? (string)(int)$book_count    : null;
+
     $stmt->bind_param(
-        "ssssssssssssissisiisss",
-        $donor_email, $category, $quantity, $description, $condition_type,
-        $pickup_address, $contact, $pickup_date, $image, $notes, $priority,
-        $food_time, $safe_hours, $cloth_type, $is_clean, $subject_grade,
-        $book_count, $expiry_date, $medicine_type, $device_type, $working_status
+        "sssssssssssssssssssss",   // 21 × s
+        $donor_email,
+        $category,
+        $quantity,
+        $description,
+        $condition_type,
+        $pickup_address,
+        $contact,
+        $pickup_date,
+        $image,
+        $notes,
+        $priority,
+        $food_time,
+        $safe_hours_s,
+        $cloth_type,
+        $is_clean_s,
+        $subject_grade,
+        $book_count_s,
+        $expiry_date,
+        $medicine_type,
+        $device_type,
+        $working_status
     );
     if (!$stmt->execute()) {
         error_log("[donate] Insert failed: " . $stmt->error);
