@@ -477,11 +477,11 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
   <div class="modal-box">
     <button class="modal-close" onclick="closeGuestModal()">✕</button>
     <div class="modal-logo"><img src="../assets/logo.png" alt="SoulServe"></div>
-    <div class="modal-title">Join SoulServe</div>
-    <p class="modal-sub">Create a free account to add items to your cart, track orders and support rural artisans.</p>
+    <div class="modal-title">Welcome to SoulServe</div>
+    <p class="modal-sub">Sign in to your account or create a free account to add items to your cart and support rural artisans.</p>
     <div class="modal-tabs">
-      <button class="modal-tab active" id="tab-reg" onclick="switchModalTab('register')">Create Account</button>
-      <button class="modal-tab" id="tab-login" onclick="switchModalTab('login')">Sign In</button>
+      <button class="modal-tab" id="tab-login" onclick="switchModalTab('login')">🔑 Sign In</button>
+      <button class="modal-tab active" id="tab-reg" onclick="switchModalTab('register')">✨ Create Account</button>
     </div>
     <!-- Register -->
     <div class="modal-form active" id="form-register">
@@ -520,7 +520,11 @@ const CSRF = '<?=$is_logged_in?csrf_token():''?>';
 /* ── Add to cart ── */
 function addToCart(e, pid) {
   e.stopPropagation(); e.preventDefault();
-  if (!IS_LOGGED_IN) { openGuestModal('register'); return; }
+  if (!IS_LOGGED_IN) {
+    /* Show login tab first — they likely already have account */
+    openGuestModal('login');
+    return;
+  }
   const btns = document.querySelectorAll('#btn-'+pid+',#btn-r-'+pid);
   btns.forEach(b=>{ b.textContent='⏳ Adding…'; b.disabled=true; });
   fetch('../api/cart_action.php',{
@@ -547,7 +551,7 @@ function addToCart(e, pid) {
 
 /* ── Modal ── */
 function openGuestModal(tab){
-  switchModalTab(tab||'register');
+  switchModalTab(tab || 'login');
   document.getElementById('guestModal').classList.add('open');
   document.body.style.overflow='hidden';
 }
@@ -597,12 +601,25 @@ function submitLogin(){
   if(!email||!pwd){errEl.textContent='Please enter email and password.';errEl.style.display='block';return;}
   const btn=document.getElementById('login-btn');
   btn.disabled=true; btn.textContent='Signing in…';
-  fetch('../api/register_customer.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'email='+encodeURIComponent(email)+'&password='+encodeURIComponent(pwd)+'&name=&phone='})
+
+  /* ── Use dedicated shop_login endpoint ── */
+  fetch('../api/shop_login.php',{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:'email='+encodeURIComponent(email)+'&password='+encodeURIComponent(pwd)
+  })
   .then(r=>r.json()).then(d=>{
     btn.disabled=false; btn.textContent='Sign In & Continue Shopping →';
-    if(d.ok){sucEl.textContent=d.message||'Signed in!';sucEl.style.display='block';setTimeout(()=>location.reload(),1000);}
-    else{window.location.href='../auth/login.php?redirect='+encodeURIComponent('shop/shop.php');}
-  }).catch(()=>{btn.disabled=false;window.location.href='../auth/login.php';});
+    if(d.ok){
+      sucEl.textContent=d.message||'Signed in!'; sucEl.style.display='block';
+      setTimeout(()=>location.reload(),1000);
+    } else {
+      errEl.textContent=d.message||'Login failed.'; errEl.style.display='block';
+    }
+  }).catch(()=>{
+    btn.disabled=false;
+    errEl.textContent='Network error. Please try again.'; errEl.style.display='block';
+  });
 }
 document.getElementById('login-pwd').addEventListener('keydown',e=>{if(e.key==='Enter')submitLogin();});
 

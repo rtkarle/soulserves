@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: text/html; charset=utf-8');
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/upload.php';
 if (session_status()===PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['user_email'])) { header("Location: ../auth/login.php"); exit; }
 $email  = $_SESSION['user_email'];
@@ -8,19 +9,62 @@ $filter = $_GET['filter'] ?? 'all';
 $page   = max(1, (int)($_GET['page'] ?? 1));
 $per    = 10;
 
-$type_w=$status_w='';
-if($filter==='food')          $type_w  = "AND type='Food'";
-elseif($filter==='cloth')     $type_w  = "AND type='Clothes'";
-elseif($filter==='pending')   $status_w= "AND status='pending'";
-elseif($filter==='delivered') $status_w= "AND status='delivered'";
+/* ── Fetch from all 3 donation tables ── */
+$all = [];
 
-$sql="SELECT * FROM ((SELECT COALESCE(donation_id,CONCAT('DON-FOOD-',LPAD(id,6,'0'))) AS don_id,'Food' AS type,status,quantity,pickup_address,created_at FROM food_donations WHERE donor_email=?) UNION ALL (SELECT COALESCE(donation_id,CONCAT('DON-CLO-',LPAD(id,6,'0'))) AS don_id,'Clothes' AS type,status,quantity,pickup_address,created_at FROM cloth_donations WHERE donor_email=?)) combined WHERE 1=1 $type_w $status_w ORDER BY created_at DESC";
-$h=$conn->prepare($sql);$h->bind_param("ss",$email,$email);$h->execute();
-$all=$h->get_result()->fetch_all(MYSQLI_ASSOC);
-$total_rows=count($all);
-$total_pages=max(1,(int)ceil($total_rows/$per));
-$page=min($page,$total_pages);
-$rows=array_slice($all,($page-1)*$per,$per);
+// 1. food_donations
+try {
+    $q = $conn->prepare("SELECT
+        COALESCE(donation_id,CONCAT('DON-FOOD-',LPAD(id,6,'0'))) AS don_id,
+        'Food' AS type, 'food' AS category,
+        status, quantity, pickup_address, created_at, image, priority, volunteer_email
+        FROM food_donations WHERE donor_email=? ORDER BY created_at DESC");
+    $q->bind_param("s",$email); $q->execute();
+    $all = array_merge($all, $q->get_result()->fetch_all(MYSQLI_ASSOC));
+} catch(Throwable $e) {}
+
+// 2. cloth_donations
+try {
+    $q2 = $conn->prepare("SELECT
+        COALESCE(donation_id,CONCAT('DON-CLO-',LPAD(id,6,'0'))) AS don_id,
+        'Clothes' AS type, 'clothes' AS category,
+        status, quantity, pickup_address, created_at, image, 'medium' AS priority, volunteer_email
+        FROM cloth_donations WHERE donor_email=? ORDER BY created_at DESC");
+    $q2->bind_param("s",$email); $q2->execute();
+    $all = array_merge($all, $q2->get_result()->fetch_all(MYSQLI_ASSOC));
+} catch(Throwable $e) {}
+
+// 3. unified donations table (all new categories)
+try {
+    $q3 = $conn->prepare("SELECT
+        COALESCE(donation_id,CONCAT('DON-',UPPER(category),'-',LPAD(id,6,'0'))) AS don_id,
+        CONCAT(UPPER(SUBSTRING(category,1,1)),LOWER(SUBSTRING(category,2))) AS type,
+        category,
+        status, quantity, pickup_address, created_at, image, priority, volunteer_email
+        FROM donations WHERE donor_email=? ORDER BY created_at DESC");
+    $q3->bind_param("s",$email); $q3->execute();
+    $all = array_merge($all, $q3->get_result()->fetch_all(MYSQLI_ASSOC));
+} catch(Throwable $e) {}
+
+// Sort all by created_at DESC
+usort($all, fn($a,$b) => strtotime($b['created_at']) - strtotime($a['created_at']));
+
+// Apply filters
+$cat_icons = ['food'=>'🍱','clothes'=>'👕','Food'=>'🍱','Clothes'=>'👕',
+              'study_material'=>'📚','school_supplies'=>'🎒','toys'=>'🧸',
+              'medicines'=>'💊','electronics'=>'📱','furniture'=>'🪑','other'=>'📦'];
+
+if ($filter === 'food')          $all = array_filter($all, fn($r)=> strtolower($r['category']??$r['type']) === 'food');
+elseif ($filter === 'cloth')     $all = array_filter($all, fn($r)=> in_array(strtolower($r['category']??$r['type']),['clothes','cloth']));
+elseif ($filter === 'other')     $all = array_filter($all, fn($r)=> !in_array(strtolower($r['category']??$r['type']),['food','clothes','cloth']));
+elseif ($filter === 'pending')   $all = array_filter($all, fn($r)=> $r['status'] === 'pending');
+elseif ($filter === 'delivered') $all = array_filter($all, fn($r)=> $r['status'] === 'delivered');
+$all = array_values($all);
+
+$total_rows  = count($all);
+$total_pages = max(1,(int)ceil($total_rows/$per));
+$page        = min($page,$total_pages);
+$rows        = array_slice($all, ($page-1)*$per, $per);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -91,13 +135,13 @@ tbody tr:nth-child(3){animation-delay:.12s}tbody tr:nth-child(n+4){animation-del
 
 <div class="page">
   <div class="page-title">Donation History</div>
-  <div class="page-sub">All your food and clothing donations in one place.</div>
+  <div class="page-sub">All your donations — food, clothes, medicines, electronics and more.</div>
 
   <div class="filter-wrap">
     <div class="filter-bar">
       <?php
-header('Content-Type: text/html; charset=utf-8');
-      $filters=[['all','All'],['food','🍱 Food'],['cloth','👕 Clothes'],['pending','⏳ Pending'],['delivered','✅ Delivered']];
+      $filters=[['all','All'],['food','🍱 Food'],['cloth','👕 Clothes'],
+                ['other','📦 Others'],['pending','⏳ Pending'],['delivered','✅ Delivered']];
       foreach($filters as [$v,$l]):?>
       <a href="history.php?filter=<?=$v?>&page=1" class="filter-btn <?=$filter===$v?'active':''?>"><?=$l?></a>
       <?php endforeach; ?>
@@ -107,20 +151,27 @@ header('Content-Type: text/html; charset=utf-8');
 
   <div class="table-card">
     <?php if(empty($rows)): ?>
-      <div class="empty"><span class="emoji">📭</span><p>No donations found for this filter.</p></div>
+      <div class="empty"><span class="emoji">📭</span><p>No donations found for this filter.</p>
+        <a href="donate.php" style="display:inline-block;margin-top:14px;padding:10px 22px;background:var(--accent);color:#fff;border-radius:10px;font-weight:700;text-decoration:none;font-size:13px">+ Donate Now</a>
+      </div>
     <?php else: ?>
     <div class="table-scroll">
     <table>
-      <thead><tr><th>Donation ID</th><th>Type</th><th>Quantity</th><th>Pickup Address</th><th>Date</th><th>Status</th></tr></thead>
+      <thead><tr><th>Donation ID</th><th>Category</th><th>Quantity</th><th>Pickup Address</th><th>Date</th><th>Status</th><th>Photo</th></tr></thead>
       <tbody>
-        <?php foreach($rows as $r): ?>
+        <?php foreach($rows as $r):
+          $cat = $r['category'] ?? strtolower($r['type'] ?? 'other');
+          $icon = $cat_icons[$cat] ?? $cat_icons[$r['type'] ?? ''] ?? '📦';
+          $label = ucfirst(str_replace('_',' ', $cat));
+        ?>
         <tr>
           <td><span style="font-size:11px;font-weight:700;background:rgba(122,125,63,.1);color:#5a7a2e;padding:3px 10px;border-radius:20px;font-family:monospace"><?=htmlspecialchars($r['don_id']??'—')?></span></td>
-          <td><span class="type-badge <?=$r['type']==='Food'?'type-food':'type-cloth'?>"><?=$r['type']==='Food'?'🍱 Food':'👕 Clothes'?></span></td>
+          <td><span style="font-size:12px;font-weight:700;padding:3px 10px;background:#f0ede5;border-radius:8px;white-space:nowrap"><?=$icon?> <?=$label?></span></td>
           <td><?=htmlspecialchars($r['quantity']??'—')?></td>
-          <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?=htmlspecialchars($r['pickup_address']??'—')?></td>
+          <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><?=htmlspecialchars($r['pickup_address']??'—')?></td>
           <td style="white-space:nowrap"><?=date("d M Y",strtotime($r['created_at']))?></td>
           <td><span class="pill <?=htmlspecialchars($r['status'])?>"><?=ucfirst(str_replace('_',' ',$r['status']))?></span></td>
+          <td><?php if(!empty($r['image'])): ?><img src="<?=htmlspecialchars(image_url($r['image']))?>" style="width:40px;height:40px;object-fit:cover;border-radius:6px"><?php else: ?>—<?php endif;?></td>
         </tr>
         <?php endforeach; ?>
       </tbody>

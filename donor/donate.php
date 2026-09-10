@@ -582,8 +582,25 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
           </div>
         </div>
         <div class="field">
-          <label>Upload Photo (optional)</label>
-          <input type="file" name="image" accept="image/*" id="fieldImage">
+          <label>Upload Photos (optional, up to 3)</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+            <div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Photo 1</div>
+              <input type="file" name="image"  accept="image/*" id="fieldImage1" onchange="previewImg(this,'prev1')">
+              <div id="prev1" style="margin-top:6px;display:none"><img style="width:100%;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border)"></div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Photo 2</div>
+              <input type="file" name="image2" accept="image/*" onchange="previewImg(this,'prev2')">
+              <div id="prev2" style="margin-top:6px;display:none"><img style="width:100%;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border)"></div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--muted);margin-bottom:5px">Photo 3</div>
+              <input type="file" name="image3" accept="image/*" onchange="previewImg(this,'prev3')">
+              <div id="prev3" style="margin-top:6px;display:none"><img style="width:100%;height:70px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border)"></div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">Max 8MB each. Helps volunteers identify items quickly.</div>
         </div>
         <div class="field">
           <label>Additional Notes</label>
@@ -877,6 +894,22 @@ function updateFootwearSizes() {
 // Init default sizes on page load
 updateClothSizes();
 updateFootwearSizes();
+
+// Image preview
+function previewImg(input, previewId) {
+  const prev = document.getElementById(previewId);
+  if (!prev) return;
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      prev.querySelector('img').src = e.target.result;
+      prev.style.display = 'block';
+    };
+    reader.readAsDataURL(input.files[0]);
+  } else {
+    prev.style.display = 'none';
+  }
+}
 
 // Mobile menu
 const mt = document.getElementById('menuToggle');

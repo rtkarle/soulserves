@@ -1,25 +1,22 @@
 <?php
 /**
  * SoulServe — Unified Donation Handler
- * Handles all donation categories: food, clothes, study_material,
- * school_supplies, toys, medicines, electronics, furniture, other
+ * All 9 categories, up to 3 images, all fields optional except pickup+contact
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/upload.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 
-if (!isset($_SESSION['user_email'])) {
-    header("Location: ../auth/login.php"); exit;
-}
+if (!isset($_SESSION['user_email'])) { header("Location: ../auth/login.php"); exit; }
 csrf_verify();
 
 $donor_email = $_SESSION['user_email'];
 
-/* ── Ensure donations table exists ── */
+/* ── Ensure donations table + image columns exist ── */
 try {
     $conn->query("CREATE TABLE IF NOT EXISTS donations (
         id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        donation_id     VARCHAR(30)  NOT NULL UNIQUE,
+        donation_id     VARCHAR(30)  UNIQUE,
         donor_email     VARCHAR(180) NOT NULL,
         category        VARCHAR(30)  NOT NULL DEFAULT 'other',
         quantity        VARCHAR(100) NOT NULL DEFAULT '1',
@@ -30,6 +27,8 @@ try {
         pickup_date     DATE,
         pickup_time     TIME,
         image           VARCHAR(400),
+        image2          VARCHAR(400),
+        image3          VARCHAR(400),
         status          ENUM('pending','accepted','rejected','scheduled',
                              'out_for_pickup','picked_up','delivered')
                         NOT NULL DEFAULT 'pending',
@@ -56,6 +55,16 @@ try {
     error_log("[donate] Table create failed: " . $e->getMessage());
 }
 
+/* ── Add image2/image3 columns if missing ── */
+foreach (['image2','image3'] as $col) {
+    try {
+        $chk = $conn->query("SHOW COLUMNS FROM donations LIKE '$col'");
+        if ($chk && $chk->num_rows === 0) {
+            $conn->query("ALTER TABLE donations ADD COLUMN $col VARCHAR(400) DEFAULT NULL AFTER image");
+        }
+    } catch (Throwable $e) {}
+}
+
 /* ── Validate category ── */
 $allowed_cats = ['food','clothes','study_material','school_supplies',
                  'toys','medicines','electronics','furniture','other'];
@@ -72,74 +81,44 @@ $contact        = trim($_POST['contact']        ?? '');
 $pickup_date    = trim($_POST['pickup_date']    ?? '') ?: null;
 $notes          = trim($_POST['notes']          ?? '');
 $condition_type = trim($_POST['condition_type'] ?? 'good');
-$priority       = in_array($_POST['priority'] ?? '', ['low','medium','high']) ? $_POST['priority'] : 'medium';
+$priority       = in_array($_POST['priority'] ?? '', ['low','medium','high'])
+                    ? $_POST['priority'] : 'medium';
 
-if (!$quantity || !$description || !$pickup_address || !$contact) {
+if (!$quantity || !$pickup_address || !$contact) {
     header("Location: ../donor/donate.php?error=fields"); exit;
 }
 
 /* ── Category-specific fields ── */
-$food_time     = null;
-$safe_hours    = null;
-$cloth_type    = null;
-$is_clean      = 1;
-$subject_grade = null;
-$book_count    = null;
-$expiry_date   = null;
-$medicine_type = null;
-$device_type   = null;
-$working_status= 'working';
+$food_time      = null; $safe_hours    = null;
+$cloth_type     = null; $is_clean      = 1;
+$subject_grade  = null; $book_count    = null;
+$expiry_date    = null; $medicine_type = null;
+$device_type    = null; $working_status= 'working';
 
 switch ($category) {
     case 'food':
-        $food_time  = trim($_POST['food_time']   ?? '') ?: null;
-        $safe_hours = (int)($_POST['safe_hours'] ?? 0) ?: null;
-        if (!$food_time || !$safe_hours) {
-            header("Location: ../donor/donate.php?error=fields"); exit;
-        }
+        $food_time  = trim($_POST['food_time'] ?? '') ?: null;
+        $safe_hours = trim($_POST['safe_hours'] ?? '') ?: null;
         break;
     case 'clothes':
         $cloth_type = trim($_POST['cloth_for'] ?? '') ?: trim($_POST['cloth_type'] ?? '');
         $is_clean   = isset($_POST['is_clean']) ? 1 : 0;
-        // Extra fields stored in description supplement
-        $cloth_subcat   = trim($_POST['cloth_subcat']       ?? '');
-        $cloth_for      = trim($_POST['cloth_for']          ?? '');
-        $cloth_garment  = trim($_POST['cloth_garment_type'] ?? '');
-        $cloth_sizes    = trim($_POST['cloth_sizes']        ?? '') ?: trim($_POST['footwear_sizes'] ?? '');
-        $cloth_pieces   = (int)($_POST['cloth_pieces']      ?? $_POST['footwear_pairs'] ?? 0) ?: null;
-        $cloth_color    = trim($_POST['cloth_color']        ?? '');
-        $cloth_packed   = trim($_POST['cloth_packed']       ?? '');
-        $footwear_for   = trim($_POST['footwear_for']       ?? '');
-        $footwear_type  = trim($_POST['footwear_type']      ?? '');
-        $footwear_sizes = trim($_POST['footwear_sizes']     ?? '');
-        $footwear_pairs = (int)($_POST['footwear_pairs']    ?? 0) ?: null;
-
-        // Build rich description auto-supplement
-        $extra_parts = [];
-        if ($cloth_subcat === 'footwear') {
-            if ($footwear_type) $extra_parts[] = "Type: $footwear_type";
-            if ($footwear_for)  $extra_parts[] = "For: $footwear_for";
-            if ($footwear_sizes) $extra_parts[] = "Sizes: $footwear_sizes";
-            if ($footwear_pairs) $extra_parts[] = "Pairs: $footwear_pairs";
-        } else {
-            if ($cloth_garment) $extra_parts[] = "Garment: $cloth_garment";
-            if ($cloth_for)     $extra_parts[] = "For: $cloth_for";
-            if ($cloth_sizes)   $extra_parts[] = "Sizes: $cloth_sizes";
-            if ($cloth_pieces)  $extra_parts[] = "Pieces: $cloth_pieces";
-            if ($cloth_color)   $extra_parts[] = "Color: $cloth_color";
-            if ($cloth_packed)  $extra_parts[] = "Packing: $cloth_packed";
+        // Enrich description with size/garment info
+        $extras = [];
+        foreach (['cloth_garment_type','cloth_sizes','cloth_color','cloth_packed',
+                  'footwear_type','footwear_sizes'] as $k) {
+            if (!empty($_POST[$k])) $extras[] = ucfirst(str_replace('_',' ',$k)) . ': ' . trim($_POST[$k]);
         }
-        if (!empty($extra_parts)) {
-            $description .= ' | ' . implode(' | ', $extra_parts);
-        }
-        // Store sizes in subject_grade field (reuse existing column)
-        $subject_grade = $cloth_subcat === 'footwear' ? $footwear_sizes : $cloth_sizes;
+        if (!empty($_POST['cloth_pieces']))   $extras[] = 'Pieces: ' . (int)$_POST['cloth_pieces'];
+        if (!empty($_POST['footwear_pairs'])) $extras[] = 'Pairs: '  . (int)$_POST['footwear_pairs'];
+        if ($extras) $description .= ($description ? ' | ' : '') . implode(' | ', $extras);
+        $subject_grade = trim($_POST['cloth_sizes'] ?? $_POST['footwear_sizes'] ?? '');
         break;
     case 'study_material':
     case 'school_supplies':
     case 'toys':
         $subject_grade = trim($_POST['subject_grade'] ?? '') ?: null;
-        $book_count    = (int)($_POST['book_count'] ?? 0) ?: null;
+        $book_count    = trim($_POST['book_count']    ?? '') ?: null;
         break;
     case 'medicines':
         $medicine_type = trim($_POST['medicine_type'] ?? '') ?: null;
@@ -160,62 +139,46 @@ switch ($category) {
         break;
 }
 
-/* ── Image upload (optional for all categories) ── */
+/* ── Multiple image upload (up to 3, all optional) ── */
 $uploadDir = __DIR__ . '/../uploads/';
-$image = null;
-if (!empty($_FILES['image']['name'])) {
-    $image = secure_upload($_FILES['image'], $uploadDir, $category);
-    if (!$image) {
-        header("Location: ../donor/donate.php?error=upload"); exit;
+$image1 = $image2 = $image3 = null;
+
+$img_fields = ['image', 'image2', 'image3'];
+$img_vars   = [&$image1, &$image2, &$image3];
+
+for ($i = 0; $i < 3; $i++) {
+    $field = $img_fields[$i];
+    if (!empty($_FILES[$field]['name']) && $_FILES[$field]['error'] === UPLOAD_ERR_OK) {
+        $up = secure_upload($_FILES[$field], $uploadDir, $category . '_' . ($i+1));
+        if ($up) $img_vars[$i] = $up;
+        else error_log("[donate] Image$i upload failed for $donor_email");
     }
 }
 
-/* ── Insert into donations table ── */
+/* ── Insert ── */
 try {
     $stmt = $conn->prepare(
         "INSERT INTO donations
          (donor_email, category, quantity, description, condition_type, pickup_address,
-          contact, pickup_date, image, status, notes, priority, food_time, safe_hours,
-          cloth_type, is_clean, subject_grade, book_count, expiry_date, medicine_type,
-          device_type, working_status, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,NOW())"
+          contact, pickup_date, image, image2, image3, status, notes, priority,
+          food_time, safe_hours, cloth_type, is_clean, subject_grade, book_count,
+          expiry_date, medicine_type, device_type, working_status, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?,?,?,?,?,?,?,?,?,?,NOW())"
     );
-    // 21 ? placeholders → 21 variables → type string = 21 chars
-    // s=donor_email, s=category, s=quantity, s=description, s=condition_type,
-    // s=pickup_address, s=contact, s=pickup_date, s=image,
-    // (status = 'pending' — hardcoded, no ?)
-    // s=notes, s=priority, s=food_time, i=safe_hours,
-    // s=cloth_type, i=is_clean, s=subject_grade, i=book_count,
-    // s=expiry_date, s=medicine_type, s=device_type, s=working_status
-    // (created_at = NOW() — hardcoded, no ?)
-    // Use all-string binding — MySQL auto-casts to INT where needed
-    $safe_hours_s    = $safe_hours    !== null ? (string)(int)$safe_hours    : null;
-    $is_clean_s      = (string)(int)$is_clean;
-    $book_count_s    = $book_count    !== null ? (string)(int)$book_count    : null;
+    // 23 ? → 23 vars, all strings
+    $sh_s  = $safe_hours  !== null ? (string)$safe_hours  : null;
+    $bc_s  = $book_count  !== null ? (string)$book_count  : null;
+    $icl_s = (string)(int)$is_clean;
 
     $stmt->bind_param(
-        "sssssssssssssssssssss",   // 21 × s
-        $donor_email,
-        $category,
-        $quantity,
-        $description,
-        $condition_type,
-        $pickup_address,
-        $contact,
-        $pickup_date,
-        $image,
-        $notes,
-        $priority,
-        $food_time,
-        $safe_hours_s,
-        $cloth_type,
-        $is_clean_s,
-        $subject_grade,
-        $book_count_s,
-        $expiry_date,
-        $medicine_type,
-        $device_type,
-        $working_status
+        "sssssssssssssssssssssss",
+        $donor_email, $category, $quantity, $description, $condition_type,
+        $pickup_address, $contact, $pickup_date,
+        $image1, $image2, $image3,
+        $notes, $priority,
+        $food_time, $sh_s, $cloth_type, $icl_s,
+        $subject_grade, $bc_s, $expiry_date, $medicine_type,
+        $device_type, $working_status
     );
     if (!$stmt->execute()) {
         error_log("[donate] Insert failed: " . $stmt->error);
@@ -228,42 +191,27 @@ try {
 }
 
 /* ── Generate Donation ID ── */
-$prefix_map = [
-    'food'            => 'FOOD',
-    'clothes'         => 'CLO',
-    'study_material'  => 'STDY',
-    'school_supplies' => 'SCHL',
-    'toys'            => 'TOY',
-    'medicines'       => 'MED',
-    'electronics'     => 'ELEC',
-    'furniture'       => 'FURN',
-    'other'           => 'OTH',
-];
-$pfx = $prefix_map[$category] ?? 'DON';
-$donation_id = 'DON-' . $pfx . '-' . str_pad($new_id, 6, '0', STR_PAD_LEFT);
+$pfx_map = ['food'=>'FOOD','clothes'=>'CLO','study_material'=>'STDY',
+            'school_supplies'=>'SCHL','toys'=>'TOY','medicines'=>'MED',
+            'electronics'=>'ELEC','furniture'=>'FURN','other'=>'OTH'];
+$donation_id = 'DON-' . ($pfx_map[$category] ?? 'DON') . '-' . str_pad($new_id, 6, '0', STR_PAD_LEFT);
+try {
+    $upd = $conn->prepare("UPDATE donations SET donation_id=? WHERE id=?");
+    $upd->bind_param("si", $donation_id, $new_id);
+    $upd->execute();
+} catch (Throwable $e) {}
 
-$conn->prepare("UPDATE donations SET donation_id=? WHERE id=?")
-     ->bind_param("si", $donation_id, $new_id) || null;
-$upd = $conn->prepare("UPDATE donations SET donation_id=? WHERE id=?");
-$upd->bind_param("si", $donation_id, $new_id);
-$upd->execute();
-
-/* ── Send email notification ── */
+/* ── Email notification (non-fatal) ── */
 try {
     require_once __DIR__ . '/../config/mail.php';
     $nr = $conn->prepare("SELECT name FROM register WHERE email=?");
     $nr->bind_param("s", $donor_email); $nr->execute();
     $donor_name = $nr->get_result()->fetch_assoc()['name'] ?? 'Donor';
     sendDonationReceived($donor_email, $donor_name, $category, $quantity, $pickup_address);
-} catch (Throwable $e) {
-    error_log("[donate] Mail failed: " . $e->getMessage());
-}
+} catch (Throwable $e) { error_log("[donate] Mail: " . $e->getMessage()); }
 
 /* ── Invalidate AI cache ── */
-try {
-    require_once __DIR__ . '/../api/ai_engine.php';
-    ai_cache_clear();
-} catch (Throwable $e) {}
+try { require_once __DIR__ . '/../api/ai_engine.php'; ai_cache_clear(); } catch (Throwable $e) {}
 
-header("Location: ../donor/donate.php?success=1&don_id=" . urlencode($donation_id));
+header("Location: ../donor/donor_dashboard.php?success=" . urlencode($category) . "&don_id=" . urlencode($donation_id));
 exit;
