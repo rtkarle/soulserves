@@ -2,8 +2,17 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/config.php';
 
-// Simple mysqli_connect — works with Railway MySQL proxy
+/* ── Optimized mysqli connection ── */
+$mysqli_driver = new mysqli_driver();
+$mysqli_driver->report_mode = MYSQLI_REPORT_OFF; // handle errors manually
+
 $conn = @mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+
+if ($conn) {
+    /* Reduce round-trips: set session vars in one query */
+    mysqli_set_charset($conn, 'utf8mb4');
+    $conn->query("SET time_zone='+05:30', sql_mode='STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'");
+}
 
 if (!$conn) {
     error_log("DB Error: " . mysqli_connect_error() . " [" . DB_HOST . ":" . DB_PORT . "]");
@@ -22,8 +31,6 @@ if (!$conn) {
     }
     exit;
 }
-
-mysqli_set_charset($conn, 'utf8mb4');
 
 /* ── CSRF helpers ─────────────────────────────────────── */
 function csrf_token(): string {

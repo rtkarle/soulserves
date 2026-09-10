@@ -62,36 +62,46 @@ $me          = mysqli_real_escape_string($conn,$email);
 $cart_count  = sc2($conn,"SELECT COUNT(*) c FROM cart WHERE user_email='$me'");
 $order_count = sc2($conn,"SELECT COUNT(*) c FROM orders WHERE buyer_email='$me'");
 
-/* ── AI Engine calls — session-cached (5-min TTL) ── */
+/* ── AI Engine calls — session-cached, non-blocking ── */
 $ai = adhaar_ai();
-$ai_suggestions  = []; $ai_products = []; $ai_impact = [];
-$ai_causes       = []; $ai_report   = []; $ai_alerts  = [];
-$ai_recurring    = []; $ai_badges   = []; $ai_need    = [];
+$ai_suggestions = []; $ai_products = []; $ai_impact = [];
+$ai_causes      = []; $ai_report   = []; $ai_alerts  = [];
+$ai_recurring   = []; $ai_badges   = []; $ai_need    = [];
 try {
+  /* Critical (shown above fold) — load these */
   $ai_suggestions = ai_cached("donor_sug_{$email}",    300, fn()=> $ai->getDonorSuggestions($email) ?: []);
-  $ai_products    = ai_cached("donor_prod_{$email}",   300, fn()=> $ai->getProductRecommendations($email,0,4) ?: []);
   $ai_impact      = ai_cached("donor_impact_{$email}", 300, fn()=> $ai->predictImpact() ?: []);
-  $ai_causes      = ai_cached("donor_causes_{$email}", 300, fn()=> $ai->getPersonalizedCauses($email) ?: []);
-  $ai_report      = ai_cached("donor_report_{$email}", 600, fn()=> $ai->generateMonthlyReport($email) ?: []);
   $ai_alerts      = ai_cached("donor_alerts_{$email}", 180, fn()=> $ai->getDonorAlerts($email) ?: []);
-  $ai_recurring   = ai_cached("donor_recur_{$email}",  600, fn()=> $ai->suggestRecurring($email) ?: []);
-  // Badges: award idempotently, cache display list only
-  $newly_earned   = award_badges($conn, $email);
-  if ($newly_earned) ai_cache_clear();   // invalidate stale cache when badges change
-  $ai_badges      = ai_cached("donor_badges_{$email}", 300, fn()=> get_donor_badges($conn,$email) ?: []);
-} catch(Throwable $e){}
+  /* Badges — award idempotently */
+  $newly_earned = award_badges($conn, $email);
+  if ($newly_earned) ai_cache_clear();
+  $ai_badges = ai_cached("donor_badges_{$email}", 300, fn()=> get_donor_badges($conn,$email) ?: []);
+  /* Non-critical (below fold) — longer TTL */
+  $ai_products  = ai_cached("donor_prod_{$email}",   600, fn()=> $ai->getProductRecommendations($email,0,4) ?: []);
+  $ai_causes    = ai_cached("donor_causes_{$email}", 900, fn()=> $ai->getPersonalizedCauses($email) ?: []);
+  $ai_report    = ai_cached("donor_report_{$email}",1800, fn()=> $ai->generateMonthlyReport($email) ?: []);
+  $ai_recurring = ai_cached("donor_recur_{$email}", 1800, fn()=> $ai->suggestRecurring($email) ?: []);
+  /* Need match — cache per active donation ── */
+  if (!empty($active_arr)) {
+      $d0 = $active_arr[0];
+      $need_key = "donor_need_{$d0['id']}_{$d0['type']}";
+      $ai_need = ai_cached($need_key, 600, fn()=>
+          $ai->matchDonationToNeed($d0['type']==='Food'?'food':'cloth',(int)($d0['quantity'] ?? 0),$d0['pickup_address']??'') ?: []
+      );
+  }
+} catch(Throwable $e) {}
 
 /* ── AI impact vars ── */
-$pf   = isset($ai_impact['people_fed'])    ? (int)$ai_impact['people_fed']    : null;
-$co2  = isset($ai_impact['co2_saved_kg'])  ? (float)$ai_impact['co2_saved_kg'] : null;
-$ecov = isset($ai_impact['economic_value'])? (int)$ai_impact['economic_value']  : null;
+$pf   = isset($ai_impact['people_fed'])     ? (int)$ai_impact['people_fed']     : null;
+$co2  = isset($ai_impact['co2_saved_kg'])   ? (float)$ai_impact['co2_saved_kg'] : null;
+$ecov = isset($ai_impact['economic_value']) ? (int)$ai_impact['economic_value']  : null;
 
-/* ── shop featured ── */
+/* ── Shop featured products ── */
 $featured = [];
-try{$fq=$conn->query("SELECT p.*,s.store_name FROM products p JOIN seller_stores s ON s.seller_email=p.seller_email WHERE p.is_active=1 AND s.is_active=1 ORDER BY p.total_sold DESC,p.avg_rating DESC LIMIT 4");$featured=$fq?$fq->fetch_all(MYSQLI_ASSOC):[];}catch(Throwable $e){}
-
-/* ── smart need match ── */
-try{if(!empty($active_arr)){$d0=$active_arr[0];$ai_need=$ai->matchDonationToNeed($d0['type']==='Food'?'food':'cloth',(int)$d0['quantity'],$d0['pickup_address']??'');}}catch(Throwable $e){}
+try {
+    $fq = $conn->query("SELECT p.*,s.store_name FROM products p JOIN seller_stores s ON s.seller_email=p.seller_email WHERE p.is_active=1 AND s.is_active=1 ORDER BY p.total_sold DESC,p.avg_rating DESC LIMIT 4");
+    $featured = $fq ? $fq->fetch_all(MYSQLI_ASSOC) : [];
+} catch(Throwable $e) {}
 
 $success=$_GET['success']??''; $don_id=$_GET['don_id']??'';
 $STATUS_STEPS =['pending','accepted','scheduled','out_for_pickup','picked_up','delivered'];

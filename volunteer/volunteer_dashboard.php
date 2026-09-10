@@ -78,8 +78,13 @@ try{$tq2=$conn->prepare("SELECT vt.* FROM volunteer_tasks vt WHERE vt.volunteer_
 $peers=[];
 try{$pvq=$conn->query("SELECT name,email,mobile,address FROM register WHERE role='volunteer' AND verified=1 AND email!='$me' ORDER BY name LIMIT 20");$peers=$pvq?$pvq->fetch_all(MYSQLI_ASSOC):[];}catch(Throwable $e){}
 
-$cart_count  = (int)$conn->query("SELECT COUNT(*) c FROM cart WHERE user_email='$me'")->fetch_assoc()['c'];
-$order_count = (int)$conn->query("SELECT COUNT(*) c FROM orders WHERE buyer_email='$me'")->fetch_assoc()['c'];
+/* ── Combine cart + order counts ── */
+$shop_counts = $conn->query("SELECT
+    (SELECT COUNT(*) FROM cart   WHERE user_email='$me')   AS cart_count,
+    (SELECT COUNT(*) FROM orders WHERE buyer_email='$me')  AS order_count
+  FROM DUAL")->fetch_assoc();
+$cart_count  = (int)($shop_counts['cart_count']  ?? 0);
+$order_count = (int)($shop_counts['order_count'] ?? 0);
 
 /* ── ETA for each assigned donation — cached per donation ── */
 $etas = [];
@@ -93,25 +98,17 @@ foreach($assigned as $d){
     }catch(Throwable $e){}
 }
 
-/* ── Volunteer badges ── */
+/* ── Volunteer badges (award + fetch) ── */
 require_once __DIR__ . '/../api/award_badges.php';
-$vol_badges = [];
-try{ $vol_badges = get_donor_badges($conn,$email); }catch(Throwable $e){}
-// Award volunteer badges based on completions
 $tot_done = count($completed);
-$conn->query("CREATE TABLE IF NOT EXISTS donor_badges (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, donor_email VARCHAR(180) NOT NULL,
-    badge_key VARCHAR(60) NOT NULL, badge_name VARCHAR(100) NOT NULL,
-    badge_emoji VARCHAR(8) NOT NULL DEFAULT '🏅', badge_desc VARCHAR(255),
-    earned_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_donor_badge (donor_email, badge_key)
-) ENGINE=InnoDB");
-if($tot_done>=1){$conn->query("INSERT IGNORE INTO donor_badges (donor_email,badge_key,badge_name,badge_emoji,badge_desc) VALUES ('$me','vol_first','First Delivery','🌱','Completed your first delivery!')");}
-if($tot_done>=10){$conn->query("INSERT IGNORE INTO donor_badges (donor_email,badge_key,badge_name,badge_emoji,badge_desc) VALUES ('$me','vol_ten','10 Deliveries','⭐','Delivered 10 times!')");}
-if($tot_done>=25){$conn->query("INSERT IGNORE INTO donor_badges (donor_email,badge_key,badge_name,badge_emoji,badge_desc) VALUES ('$me','vol_champion','Volunteer Champion','🏆','25 deliveries completed!')");}
-if($tot_done>=50){$conn->query("INSERT IGNORE INTO donor_badges (donor_email,badge_key,badge_name,badge_emoji,badge_desc) VALUES ('$me','vol_legend','SoulServe Legend','👑','50+ deliveries. You are legendary!')");}
+try {
+    if($tot_done>=1)  $conn->query("INSERT IGNORE INTO donor_badges (donor_email,badge_key,badge_name,badge_emoji,badge_desc) VALUES ('$me','vol_first','First Delivery','🌱','Completed your first delivery!')");
+    if($tot_done>=10) $conn->query("INSERT IGNORE INTO donor_badges (donor_email,badge_key,badge_name,badge_emoji,badge_desc) VALUES ('$me','vol_ten','10 Deliveries','⭐','Delivered 10 times!')");
+    if($tot_done>=25) $conn->query("INSERT IGNORE INTO donor_badges (donor_email,badge_key,badge_name,badge_emoji,badge_desc) VALUES ('$me','vol_champion','Volunteer Champion','🏆','25 deliveries completed!')");
+    if($tot_done>=50) $conn->query("INSERT IGNORE INTO donor_badges (donor_email,badge_key,badge_name,badge_emoji,badge_desc) VALUES ('$me','vol_legend','SoulServe Legend','👑','50+ deliveries. You are legendary!')");
+} catch(Throwable $e) {}
 $vol_badges = [];
-try{$bq=$conn->query("SELECT * FROM donor_badges WHERE donor_email='$me' ORDER BY earned_at DESC");$vol_badges=$bq?$bq->fetch_all(MYSQLI_ASSOC):[];}catch(Throwable $e){}
+try { $bq=$conn->query("SELECT * FROM donor_badges WHERE donor_email='$me' ORDER BY earned_at DESC"); $vol_badges=$bq?$bq->fetch_all(MYSQLI_ASSOC):[]; } catch(Throwable $e) {}
 
 /* ── impact score ── */
 $impact_score = (int)($ai_workload['impact_score'] ?? 0);

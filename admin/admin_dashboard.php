@@ -17,48 +17,87 @@ $food_table_exists = table_exists($conn, 'food_donations');
 $cloth_table_exists = table_exists($conn, 'cloth_donations');
 $contact_table_exists = table_exists($conn, 'contact_messages');
 
-// ── Stats ─────────────────────────────────────────────────────────────────
-$stats = [
-  'total_users'     => (int)$conn->query("SELECT COUNT(*) c FROM register WHERE verified=1")->fetch_assoc()['c'],
-  'donors'          => (int)$conn->query("SELECT COUNT(*) c FROM register WHERE role='donor' AND verified=1")->fetch_assoc()['c'],
-  'volunteers'      => (int)$conn->query("SELECT COUNT(*) c FROM register WHERE role='volunteer' AND verified=1")->fetch_assoc()['c'],
-  'sellers'         => (int)$conn->query("SELECT COUNT(*) c FROM register WHERE role='seller' AND verified=1")->fetch_assoc()['c'],
-  'food_total'      => $food_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM food_donations")->fetch_assoc()['c'] : 0,
-  'food_pending'    => $food_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM food_donations WHERE status='pending'")->fetch_assoc()['c'] : 0,
-  'food_delivered'  => $food_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM food_donations WHERE status='delivered'")->fetch_assoc()['c'] : 0,
-  'cloth_total'     => $cloth_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM cloth_donations")->fetch_assoc()['c'] : 0,
-  'cloth_pending'   => $cloth_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM cloth_donations WHERE status='pending'")->fetch_assoc()['c'] : 0,
-  'cloth_delivered' => $cloth_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM cloth_donations WHERE status='delivered'")->fetch_assoc()['c'] : 0,
-  'total_products'  => (int)$conn->query("SELECT COUNT(*) c FROM products WHERE is_active=1")->fetch_assoc()['c'],
-  'total_orders'    => (int)$conn->query("SELECT COUNT(*) c FROM orders")->fetch_assoc()['c'],
-  'revenue'         => (float)$conn->query("SELECT COALESCE(SUM(total_amount),0) r FROM orders WHERE order_status NOT IN ('cancelled','returned')")->fetch_assoc()['r'],
-  'stores'          => (int)$conn->query("SELECT COUNT(*) c FROM seller_stores")->fetch_assoc()['c'],
-  'contact_msgs'    => $contact_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM contact_messages")->fetch_assoc()['c'] : 0,
-];
-$stats['pending_don'] = $stats['food_pending'] + $stats['cloth_pending'];
+// ── Stats — single combined queries instead of 13 separate ──────────────
+/* User stats in one query */
+$usr = $conn->query("SELECT
+    COUNT(*) AS total_users,
+    SUM(role='donor')     AS donors,
+    SUM(role='volunteer') AS volunteers,
+    SUM(role='seller')    AS sellers
+  FROM register WHERE verified=1")->fetch_assoc();
 
-// ── AI Engine ──────────────────────────────────────────────────────────────
-require_once __DIR__ . '/../api/ai_engine.php';
-$ai           = adhaar_ai();
-$ai_recs      = $ai->getAdminRecommendations();
-$ai_forecast  = $ai->demandForecast();
-$ai_impact    = $ai->predictImpact();
-
-// Weekly chart data
-$w_labels = $w_food = $w_cloth = [];
-for ($i = 7; $i >= 0; $i--) {
-    $from = date('Y-m-d', strtotime("-".($i+1)." weeks"));
-    $to   = date('Y-m-d', strtotime("-$i weeks"));
-    $wf = $food_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM food_donations WHERE created_at BETWEEN '$from' AND '$to'")->fetch_assoc()['c'] : 0;
-    $wc = $cloth_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM cloth_donations WHERE created_at BETWEEN '$from' AND '$to'")->fetch_assoc()['c'] : 0;
-    $w_labels[] = date('d M', strtotime("-$i weeks"));
-    $w_food[]   = $wf; $w_cloth[] = $wc;
+/* Donation stats in one query */
+$don_stats = ['food_total'=>0,'food_pending'=>0,'food_delivered'=>0,
+              'cloth_total'=>0,'cloth_pending'=>0,'cloth_delivered'=>0];
+if ($food_table_exists || $cloth_table_exists) {
+    $parts = [];
+    if ($food_table_exists)  $parts[] = "SELECT 'food' AS t, status FROM food_donations";
+    if ($cloth_table_exists) $parts[] = "SELECT 'cloth' AS t, status FROM cloth_donations";
+    $dr = $conn->query("SELECT t, status, COUNT(*) c FROM (" . implode(' UNION ALL ', $parts) . ") x GROUP BY t, status");
+    while ($r = $dr->fetch_assoc()) {
+        $pfx = $r['t'];
+        $don_stats[$pfx.'_total'] = ($don_stats[$pfx.'_total'] ?? 0) + (int)$r['c'];
+        if ($r['status'] === 'pending')   $don_stats[$pfx.'_pending']   = (int)$r['c'];
+        if ($r['status'] === 'delivered') $don_stats[$pfx.'_delivered']  = (int)$r['c'];
+    }
 }
 
-// Pending donations for task assignment
-$food_table_exists = table_exists($conn, 'food_donations');
-$cloth_table_exists = table_exists($conn, 'cloth_donations');
-$pending_food = $food_table_exists ? $conn->query("SELECT id,donor_email,quantity,pickup_address,priority,created_at FROM food_donations WHERE status='accepted' ORDER BY priority DESC,created_at ASC LIMIT 20")->fetch_all(MYSQLI_ASSOC) : [];
+/* Shop + revenue in one query */
+$shop = $conn->query("SELECT
+    (SELECT COUNT(*) FROM products WHERE is_active=1)       AS total_products,
+    (SELECT COUNT(*) FROM orders)                           AS total_orders,
+    (SELECT COALESCE(SUM(total_amount),0) FROM orders
+       WHERE order_status NOT IN ('cancelled','returned'))  AS revenue,
+    (SELECT COUNT(*) FROM seller_stores)                    AS stores
+  FROM DUAL")->fetch_assoc();
+
+$stats = array_merge(
+    ['total_users'=>(int)$usr['total_users'],'donors'=>(int)$usr['donors'],
+     'volunteers'=>(int)$usr['volunteers'],'sellers'=>(int)$usr['sellers']],
+    $don_stats,
+    ['total_products'=>(int)$shop['total_products'],'total_orders'=>(int)$shop['total_orders'],
+     'revenue'=>(float)$shop['revenue'],'stores'=>(int)$shop['stores'],
+     'contact_msgs'=> $contact_table_exists ? (int)$conn->query("SELECT COUNT(*) c FROM contact_messages")->fetch_assoc()['c'] : 0]
+);
+$stats['pending_don'] = $stats['food_pending'] + $stats['cloth_pending'];
+
+// ── AI Engine — defer heavy calls, only load lightweight ones ────────────
+require_once __DIR__ . '/../api/ai_engine.php';
+$ai = adhaar_ai();
+// Only load quick cached AI stats — heavy AI deferred to AJAX on demand
+$ai_impact   = ai_cached('admin_impact',   300, fn()=> $ai->predictImpact()           ?: []);
+$ai_forecast = ai_cached('admin_forecast', 600, fn()=> $ai->demandForecast()          ?: []);
+$ai_recs     = ai_cached('admin_recs',     300, fn()=> $ai->getAdminRecommendations() ?: []);
+
+// ── Weekly chart — single GROUP BY query instead of 8 loops ─────────────
+$w_labels = $w_food = $w_cloth = [];
+$week_map = [];
+for ($i = 7; $i >= 0; $i--) {
+    $label = date('d M', strtotime("-$i weeks"));
+    $key   = date('Y-W',  strtotime("-$i weeks"));
+    $w_labels[] = $label;
+    $week_map[$key] = ['food'=>0,'cloth'=>0];
+}
+if ($food_table_exists) {
+    $wr = $conn->query("SELECT YEARWEEK(created_at,1) yw, COUNT(*) c FROM food_donations WHERE created_at >= DATE_SUB(NOW(), INTERVAL 8 WEEK) GROUP BY yw");
+    while ($r = $wr->fetch_assoc()) {
+        $y = substr($r['yw'],0,4); $w = substr($r['yw'],4);
+        $k = $y.'-'.(str_pad($w,2,'0',STR_PAD_LEFT));
+        if (isset($week_map[$k])) $week_map[$k]['food'] = (int)$r['c'];
+    }
+}
+if ($cloth_table_exists) {
+    $wr2 = $conn->query("SELECT YEARWEEK(created_at,1) yw, COUNT(*) c FROM cloth_donations WHERE created_at >= DATE_SUB(NOW(), INTERVAL 8 WEEK) GROUP BY yw");
+    while ($r = $wr2->fetch_assoc()) {
+        $y = substr($r['yw'],0,4); $w = substr($r['yw'],4);
+        $k = $y.'-'.(str_pad($w,2,'0',STR_PAD_LEFT));
+        if (isset($week_map[$k])) $week_map[$k]['cloth'] = (int)$r['c'];
+    }
+}
+foreach ($week_map as $v) { $w_food[] = $v['food']; $w_cloth[] = $v['cloth']; }
+
+// ── Pending donations for task assignment ────────────────────────────────
+$pending_food  = $food_table_exists  ? $conn->query("SELECT id,donor_email,quantity,pickup_address,priority,created_at FROM food_donations WHERE status='accepted' ORDER BY FIELD(priority,'high','medium','low'),created_at ASC LIMIT 20")->fetch_all(MYSQLI_ASSOC) : [];
 $pending_cloth = $cloth_table_exists ? $conn->query("SELECT id,donor_email,quantity,pickup_address,created_at FROM cloth_donations WHERE status='accepted' ORDER BY created_at ASC LIMIT 20")->fetch_all(MYSQLI_ASSOC) : [];
 
 // Settlements (safe if table doesn't exist yet)

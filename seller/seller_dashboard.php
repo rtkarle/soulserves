@@ -32,18 +32,45 @@ $store=null;
 try{$sq2=$conn->prepare("SELECT * FROM seller_stores WHERE seller_email=?");$sq2->bind_param("s",$email);$sq2->execute();$store=$sq2->get_result()->fetch_assoc();}catch(Throwable $e){}
 $total_products=$total_orders=$pending_orders=$low_stock=0; $total_revenue=0.0;
 if($store){
-  $total_products=sq_i($conn,"SELECT COUNT(*) c FROM products WHERE seller_email='$me' AND is_active=1");
-  $total_orders  =sq_i($conn,"SELECT COUNT(*) c FROM orders WHERE seller_email='$me'");
-  $total_revenue =sq_f($conn,"SELECT COALESCE(SUM(total_amount),0) r FROM orders WHERE seller_email='$me' AND order_status NOT IN ('cancelled','returned')");
-  $pending_orders=sq_i($conn,"SELECT COUNT(*) c FROM orders WHERE seller_email='$me' AND order_status='placed'");
-  $low_stock     =sq_i($conn,"SELECT COUNT(*) c FROM products WHERE seller_email='$me' AND stock<=5 AND is_active=1");
+  /* ── Combine all seller stats into 2 queries ── */
+  $ss = $conn->query("SELECT
+      (SELECT COUNT(*) FROM products WHERE seller_email='$me' AND is_active=1) AS total_products,
+      (SELECT COUNT(*) FROM orders   WHERE seller_email='$me')                 AS total_orders,
+      (SELECT COUNT(*) FROM orders   WHERE seller_email='$me' AND order_status='placed') AS pending_orders,
+      (SELECT COUNT(*) FROM products WHERE seller_email='$me' AND stock<=5 AND is_active=1) AS low_stock,
+      (SELECT COALESCE(SUM(total_amount),0) FROM orders WHERE seller_email='$me' AND order_status NOT IN ('cancelled','returned')) AS total_revenue
+    FROM DUAL")->fetch_assoc();
+  $total_products = (int)$ss['total_products'];
+  $total_orders   = (int)$ss['total_orders'];
+  $pending_orders = (int)$ss['pending_orders'];
+  $low_stock      = (int)$ss['low_stock'];
+  $total_revenue  = (float)$ss['total_revenue'];
 }
 $products=[];
 try{$pq=$conn->prepare("SELECT p.*,(SELECT COUNT(*) FROM product_reviews WHERE product_id=p.id) rev_count FROM products p WHERE p.seller_email=? ORDER BY p.created_at DESC");$pq->bind_param("s",$email);$pq->execute();$products=$pq->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
 $orders=[];
 try{$oq=$conn->prepare("SELECT o.*,GROUP_CONCAT(oi.product_name SEPARATOR ', ') AS items FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id WHERE o.seller_email=? GROUP BY o.id ORDER BY o.created_at DESC LIMIT 50");$oq->bind_param("s",$email);$oq->execute();$orders=$oq->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
+/* ── Weekly revenue chart — single GROUP BY query ── */
 $weekly_rev=[]; $weekly_labels=[];
-try{for($i=6;$i>=0;$i--){$from=date('Y-m-d',strtotime("-$i days"));$rev=(float)$conn->query("SELECT COALESCE(SUM(total_amount),0) r FROM orders WHERE seller_email='$me' AND DATE(created_at)='$from' AND order_status NOT IN ('cancelled','returned')")->fetch_assoc()['r'];$weekly_rev[]=$rev;$weekly_labels[]=date('D',strtotime($from));}}catch(Throwable $e){}
+try {
+    $wr = $conn->query(
+        "SELECT DATE(created_at) AS d, COALESCE(SUM(total_amount),0) AS r
+         FROM orders
+         WHERE seller_email='$me'
+           AND created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+           AND order_status NOT IN ('cancelled','returned')
+         GROUP BY DATE(created_at)"
+    );
+    $rev_map = [];
+    if ($wr) { while ($r=$wr->fetch_assoc()) $rev_map[$r['d']] = (float)$r['r']; }
+    for ($i=6;$i>=0;$i--) {
+        $d = date('Y-m-d', strtotime("-$i days"));
+        $weekly_rev[]    = $rev_map[$d] ?? 0;
+        $weekly_labels[] = date('D', strtotime($d));
+    }
+} catch(Throwable $e) {
+    for($i=6;$i>=0;$i--){$weekly_rev[]=0;$weekly_labels[]=date('D',strtotime("-$i days"));}
+}
 $ai=adhaar_ai();
 $ai_recs=$ai_demand=[];
 try{
