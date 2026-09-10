@@ -125,64 +125,62 @@ switch ($category) {
         break;
 }
 
-/* ── Multiple image upload (up to 3) stored as comma-separated URLs ── */
+/* ── Upload images to Cloudinary (up to 3, all optional) ── */
 $uploadDir = __DIR__ . '/../uploads/';
 $uploaded_images = [];
-foreach (['image', 'image2', 'image3'] as $i => $field) {
+foreach (['image', 'image2', 'image3'] as $field) {
     if (!empty($_FILES[$field]['name']) && $_FILES[$field]['error'] === UPLOAD_ERR_OK) {
-        $up = secure_upload($_FILES[$field], $uploadDir, $category . '_' . ($i+1));
+        /* secure_upload() tries Cloudinary first, local fallback */
+        $up = secure_upload($_FILES[$field], $uploadDir, 'don_' . $category);
         if ($up) $uploaded_images[] = $up;
         else error_log("[donate] Image '$field' upload failed for $donor_email");
     }
 }
-// Store as comma-separated string in single image column
 $image_str = !empty($uploaded_images) ? implode(',', $uploaded_images) : null;
 
-/* ── Convert nullable ints to strings for all-s binding ── */
-$sh_s  = $safe_hours !== null ? (string)$safe_hours : null;
-$bc_s  = $book_count !== null ? (string)$book_count : null;
-$icl_s = (string)(int)$is_clean;
+/* ── Build INSERT using null-safe helper ── */
+/* Convert all values to safe strings; NULL stays NULL */
+$me_s   = mysqli_real_escape_string($conn, $donor_email);
+$cat_s  = mysqli_real_escape_string($conn, $category);
+$qty_s  = mysqli_real_escape_string($conn, $quantity);
+$desc_s = mysqli_real_escape_string($conn, $description);
+$cond_s = mysqli_real_escape_string($conn, $condition_type);
+$addr_s = mysqli_real_escape_string($conn, $pickup_address);
+$cont_s = mysqli_real_escape_string($conn, $contact);
+$img_s  = $image_str ? "'" . mysqli_real_escape_string($conn, $image_str) . "'" : 'NULL';
+$not_s  = mysqli_real_escape_string($conn, $notes);
+$pri_s  = mysqli_real_escape_string($conn, $priority);
+$cl_s   = mysqli_real_escape_string($conn, $cloth_type ?? '');
+$icl    = (int)$is_clean;
+$sg_s   = $subject_grade ? "'" . mysqli_real_escape_string($conn, $subject_grade) . "'" : 'NULL';
+$med_s  = $medicine_type ? "'" . mysqli_real_escape_string($conn, $medicine_type) . "'" : 'NULL';
+$dev_s  = $device_type   ? "'" . mysqli_real_escape_string($conn, $device_type)   . "'" : 'NULL';
+$wks_s  = mysqli_real_escape_string($conn, $working_status);
 
-/* ── INSERT — 21 ? placeholders, 21 vars, 21 × s ── */
+/* Nullable date/int fields */
+$pd_s  = $pickup_date ? "'" . mysqli_real_escape_string($conn, $pickup_date) . "'"  : 'NULL';
+$ft_s  = $food_time   ? "'" . mysqli_real_escape_string($conn, $food_time)   . "'"  : 'NULL';
+$exp_s = $expiry_date ? "'" . mysqli_real_escape_string($conn, $expiry_date) . "'"  : 'NULL';
+$sh_i  = ($safe_hours  !== null && $safe_hours  !== '') ? (int)$safe_hours  : 'NULL';
+$bc_i  = ($book_count  !== null && $book_count  !== '') ? (int)$book_count  : 'NULL';
+
 try {
-    $stmt = $conn->prepare(
-        "INSERT INTO donations
-         (donor_email, category, quantity, description, condition_type,
-          pickup_address, contact, pickup_date, image, status,
-          notes, priority, food_time, safe_hours, cloth_type,
-          is_clean, subject_grade, book_count, expiry_date,
-          medicine_type, device_type, working_status, created_at)
-         VALUES
-         (?,?,?,?,?,  ?,?,?,?,'pending',  ?,?,?,?,?,  ?,?,?,?,  ?,?,?,NOW())"
-    );
+    $sql = "INSERT INTO donations
+        (donor_email, category, quantity, description, condition_type,
+         pickup_address, contact, pickup_date, image, status,
+         notes, priority, food_time, safe_hours, cloth_type,
+         is_clean, subject_grade, book_count, expiry_date,
+         medicine_type, device_type, working_status, created_at)
+        VALUES
+        ('$me_s','$cat_s','$qty_s','$desc_s','$cond_s',
+         '$addr_s','$cont_s',$pd_s,$img_s,'pending',
+         '$not_s','$pri_s',$ft_s,$sh_i,'$cl_s',
+         $icl,$sg_s,$bc_i,$exp_s,
+         $med_s,$dev_s,'$wks_s',NOW())";
 
-    $stmt->bind_param(
-        "sssssssssssssssssssss",   // exactly 21 × s
-        $donor_email,     //  1
-        $category,        //  2
-        $quantity,        //  3
-        $description,     //  4
-        $condition_type,  //  5
-        $pickup_address,  //  6
-        $contact,         //  7
-        $pickup_date,     //  8
-        $image_str,       //  9  (comma-sep URLs or null)
-        $notes,           // 10
-        $priority,        // 11
-        $food_time,       // 12
-        $sh_s,            // 13
-        $cloth_type,      // 14
-        $icl_s,           // 15
-        $subject_grade,   // 16
-        $bc_s,            // 17
-        $expiry_date,     // 18
-        $medicine_type,   // 19
-        $device_type,     // 20
-        $working_status   // 21
-    );
-
-    if (!$stmt->execute()) {
-        error_log("[donate] Insert failed: " . $stmt->error);
+    $result = $conn->query($sql);
+    if (!$result) {
+        error_log("[donate] Insert failed: " . $conn->error . " | SQL: " . substr($sql, 0, 200));
         header("Location: ../donor/donate.php?error=server"); exit;
     }
     $new_id = (int)$conn->insert_id;
