@@ -6,6 +6,17 @@ if (!isset($_SESSION['user_email'])) { header("Location: ../auth/login.php"); ex
 $email = $_SESSION['user_email'];
 $success = $_GET['success'] ?? '';
 $error   = $_GET['error']   ?? '';
+
+$user_mobile  = '';
+$user_address = '';
+try {
+    $u_stmt = $conn->prepare("SELECT mobile, address FROM register WHERE email=? LIMIT 1");
+    $u_stmt->bind_param("s", $email);
+    $u_stmt->execute();
+    $u_profile = $u_stmt->get_result()->fetch_assoc();
+    $user_mobile  = $u_profile['mobile']  ?? '';
+    $user_address = $u_profile['address'] ?? '';
+} catch (Throwable $e) {}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -569,12 +580,12 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
         <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:16px;text-transform:uppercase;letter-spacing:.5px">📍 Pickup Details</div>
         <div class="field">
           <label>Pickup Address *</label>
-          <textarea name="pickup_address" placeholder="Full address with landmark for volunteer to locate easily" required rows="2"></textarea>
+          <textarea name="pickup_address" placeholder="Full address with landmark for volunteer to locate easily" required rows="2"><?=htmlspecialchars($user_address)?></textarea>
         </div>
         <div class="field-row">
           <div class="field">
             <label>Contact Number *</label>
-            <input type="tel" name="contact" pattern="[6-9][0-9]{9}" placeholder="10-digit mobile" required>
+            <input type="tel" name="contact" pattern="[6-9][0-9]{9}" placeholder="10-digit mobile" value="<?=htmlspecialchars($user_mobile)?>" required>
           </div>
           <div class="field">
             <label>Preferred Pickup Date</label>
@@ -910,6 +921,18 @@ function previewImg(input, previewId) {
     prev.style.display = 'none';
   }
 }
+
+// Auto-select category if passed in URL query param (e.g. donate.php?cat=clothes)
+window.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const catParam = urlParams.get('cat');
+  if (catParam && CATS[catParam]) {
+    const targetBtn = document.querySelector(`.cat-btn[onclick*="'${catParam}'"]`);
+    if (targetBtn) {
+      selectCat(catParam, targetBtn);
+    }
+  }
+});
 
 // Mobile menu
 const mt = document.getElementById('menuToggle');

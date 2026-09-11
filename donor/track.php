@@ -185,15 +185,29 @@ body{background:var(--bg);color:var(--text);min-height:100vh}
   <div class="page-title">Your Donation History</div>
   <div class="page-sub">All donations — real-time status updates every 20 seconds.</div>
 
+  <!-- Search & Quick Status Filters -->
+  <div class="track-search-wrap">
+    <span class="track-search-icon">🔍</span>
+    <input type="text" id="trackSearch" class="track-search-input" placeholder="Search by Donation ID, item description, or address..." oninput="applyFilters()">
+  </div>
+
+  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+    <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-right:4px">Status:</span>
+    <button class="filter-tab active" data-filter-type="status" data-val="all" onclick="filterStatus('all',this)">All Status</button>
+    <button class="filter-tab" data-filter-type="status" data-val="active" onclick="filterStatus('active',this)">⚡ Active Pickups</button>
+    <button class="filter-tab" data-filter-type="status" data-val="delivered" onclick="filterStatus('delivered',this)">✅ Delivered</button>
+  </div>
+
   <!-- Filter tabs -->
   <div class="filter-tabs">
-    <button class="filter-tab active" onclick="filterDonations('all',this)">All (<?=count($all_donations)?>)</button>
+    <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;margin-right:4px">Category:</span>
+    <button class="filter-tab active" data-filter-type="cat" data-val="all" onclick="filterDonations('all',this)">All (<?=count($all_donations)?>)</button>
     <?php
     $cat_counts = array_count_values(array_column($all_donations, 'category'));
     foreach ($cat_config as $key => $cfg):
         if (!isset($cat_counts[$key]) || $cat_counts[$key] == 0) continue;
     ?>
-    <button class="filter-tab" onclick="filterDonations('<?=$key?>',this)"><?=$cfg['icon']?> <?=$cfg['label']?> (<?=$cat_counts[$key]?>)</button>
+    <button class="filter-tab" data-filter-type="cat" data-val="<?=$key?>" onclick="filterDonations('<?=$key?>',this)"><?=$cfg['icon']?> <?=$cfg['label']?> (<?=$cat_counts[$key]?>)</button>
     <?php endforeach; ?>
   </div>
 
@@ -220,14 +234,14 @@ foreach ($all_donations as $idx => $row):
     $delay  = ($idx % 6) * 80;
     $don_id = $row['donation_id'] ?? ('DON-' . strtoupper($cat) . '-' . str_pad($row['id'],6,'0',STR_PAD_LEFT));
 ?>
-<div class="track-card" data-cat="<?=htmlspecialchars($cat)?>" style="animation-delay:<?=$delay?>ms;<?=$status==='rejected'?'border-left-color:#ef4444':($status==='delivered'?'border-left-color:#10b981':'')?>">
+<div class="track-card" data-cat="<?=htmlspecialchars($cat)?>" data-status="<?=htmlspecialchars($status)?>" data-active="<?=$is_active?'1':'0'?>" style="animation-delay:<?=$delay?>ms;<?=$status==='rejected'?'border-left-color:#ef4444':($status==='delivered'?'border-left-color:#10b981':'')?>">
   <div class="tc-header">
     <div class="tc-left">
       <span class="tc-cat" style="background:<?=$cfg['bg']?>;color:<?=$cfg['color']?>"><?=$cfg['icon']?> <?=$cfg['label']?></span>
       <span class="tc-id"><?=htmlspecialchars($don_id)?></span>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
-      <a href="../api/donation_receipt.php?id=<?=urlencode($don_id)?>&type=<?=urlencode($cat)?>" target="_blank" style="font-size:11px;padding:4px 10px;background:#e2e8f0;border-radius:20px;text-decoration:none;color:#334155;font-weight:700" title="Print Receipt">🖨️ Receipt</a>
+      <a href="../api/donation_receipt.php?id=<?=urlencode($don_id)?>&type=<?=urlencode($cat)?>" target="_blank" class="btn-receipt-modern" style="padding:4px 12px;font-size:11px" title="Print Official Receipt">🖨️ Receipt</a>
       <span class="badge <?=htmlspecialchars($status)?>"><?=ucfirst(str_replace('_',' ',$status))?></span>
     </div>
   </div>
@@ -240,7 +254,13 @@ foreach ($all_donations as $idx => $row):
   <div class="tc-row"><span>Pickup:</span><strong><?=htmlspecialchars($row['pickup_date'])?> <?=htmlspecialchars($row['pickup_time'] ?? '')?></strong></div>
   <?php endif; ?>
   <?php if(!empty($row['volunteer_email'])): ?>
-  <div class="tc-row"><span>Volunteer:</span><strong><?=htmlspecialchars($row['volunteer_email'])?></strong></div>
+  <div class="tc-row">
+    <span>Volunteer:</span>
+    <span style="display:inline-flex;align-items:center;gap:8px">
+      <strong><?=htmlspecialchars($row['volunteer_email'])?></strong>
+      <a href="mailto:<?=htmlspecialchars($row['volunteer_email'])?>" class="vol-contact-chip" style="padding:2px 8px;font-size:10px">✉️ Email</a>
+    </span>
+  </div>
   <?php endif; ?>
   <?php
   $since = $row['created_at'] ? human_time_diff(strtotime($row['created_at'])) : '';
@@ -282,12 +302,41 @@ foreach ($all_donations as $idx => $row):
 </div>
 
 <script>
-// Filter by category
+// Combined Category + Status + Keyword Filtering
+let currentCat = 'all';
+let currentStatus = 'all';
+
 function filterDonations(cat, btn) {
-  document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.filter-tab[data-filter-type="cat"]').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  currentCat = cat;
+  applyFilters();
+}
+
+function filterStatus(st, btn) {
+  document.querySelectorAll('.filter-tab[data-filter-type="status"]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentStatus = st;
+  applyFilters();
+}
+
+function applyFilters() {
+  const query = (document.getElementById('trackSearch')?.value || '').toLowerCase().trim();
   document.querySelectorAll('.track-card').forEach(card => {
-    card.style.display = (cat === 'all' || card.dataset.cat === cat) ? '' : 'none';
+    const cardCat = card.dataset.cat || '';
+    const cardStatus = card.dataset.status || '';
+    const isActive = card.dataset.active === '1';
+    const cardText = card.innerText.toLowerCase();
+
+    const matchesCat = (currentCat === 'all' || cardCat === currentCat);
+    let matchesStatus = true;
+    if (currentStatus === 'active') matchesStatus = isActive;
+    else if (currentStatus === 'delivered') matchesStatus = (cardStatus === 'delivered');
+    else if (currentStatus !== 'all') matchesStatus = (cardStatus === currentStatus);
+
+    const matchesSearch = (!query || cardText.includes(query));
+
+    card.style.display = (matchesCat && matchesStatus && matchesSearch) ? '' : 'none';
   });
 }
 

@@ -578,6 +578,19 @@ $cat_icons=['handicraft'=>'🎨','textile'=>'🧵','food_product'=>'🍯','jewel
   </div>
 </div>
 
+<?php if($low_stock > 0): ?>
+<div class="s-alert-warn" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span style="font-size:20px;">⚠️</span>
+    <div>
+      <strong style="color:#92400e;">Inventory Alert: <?=$low_stock?> product(s) running low on stock (≤5 left)!</strong>
+      <div style="font-size:11px;color:#78350f;font-weight:500;">Restock these items to prevent unfulfilled orders and missed sales.</div>
+    </div>
+  </div>
+  <button onclick="switchTab('products')" class="s-sec-btn" style="background:#b45309;color:#fff;border-color:#b45309;white-space:nowrap;padding:7px 14px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">Manage Stock →</button>
+</div>
+<?php endif; ?>
+
 <!-- KPI Cards -->
 <div class="s-kpi-row">
   <div class="s-kpi k1">

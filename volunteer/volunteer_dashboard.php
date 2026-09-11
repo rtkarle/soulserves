@@ -536,14 +536,40 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
       <strong>📞</strong> <?=htmlspecialchars($d['contact']??'—')?><br>
       <strong>Status:</strong> <span class="pill <?=htmlspecialchars($d['status'])?>"><?=ucfirst(str_replace('_',' ',$d['status']))?></span>
     </div>
+
+    <!-- Quick Navigation & Phone Action Strip -->
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <?php if(!empty($d['pickup_address'])): ?>
+      <a href="https://www.google.com/maps/search/?api=1&query=<?=urlencode($d['pickup_address'])?>" target="_blank" class="btn-field-nav" title="Open destination in Google Maps">
+        🗺️ Navigate
+      </a>
+      <?php endif; ?>
+      <?php if(!empty($d['contact'])): ?>
+      <a href="tel:<?=preg_replace('/[^0-9+]/','',$d['contact'])?>" class="btn-field-call" title="Call donor">
+        📞 Call Donor
+      </a>
+      <?php endif; ?>
+    </div>
+
     <div class="vdon-actions">
+      <?php if($d['status'] === 'scheduled'): ?>
+      <form method="POST" action="../api/update_status.php" style="flex:1">
+        <?=csrf_field()?>
+        <input type="hidden" name="id" value="<?=(int)$d['id']?>">
+        <input type="hidden" name="table" value="<?=$tbl?>">
+        <input type="hidden" name="status" value="out_for_pickup">
+        <button type="submit" class="action-btn" style="background:#fce7f3;color:#9d174d;font-weight:700">🚚 Start Pickup</button>
+      </form>
+      <?php elseif($d['status'] === 'out_for_pickup'): ?>
       <form method="POST" action="../api/update_status.php" style="flex:1">
         <?=csrf_field()?>
         <input type="hidden" name="id" value="<?=(int)$d['id']?>">
         <input type="hidden" name="table" value="<?=$tbl?>">
         <input type="hidden" name="status" value="picked_up">
-        <button type="submit" class="action-btn btn-pickup">📦 Picked Up</button>
+        <button type="submit" class="action-btn btn-pickup">📦 Mark Picked</button>
       </form>
+      <?php endif; ?>
+
       <button type="button" class="action-btn btn-delivered" onclick="openProofModal(<?=(int)$d['id']?>,'<?=$tbl?>','<?=htmlspecialchars(addslashes($d['type']))?>')">✅ Delivered</button>
     </div>
   </div>

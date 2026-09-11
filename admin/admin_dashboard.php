@@ -167,13 +167,16 @@ $stats['events_news'] = $events_count;
 
 // ── Activity feed ─────────────────────────────────────────────────────────
 $activity = [];
-if ($food_table_exists || $cloth_table_exists || table_exists($conn, 'orders')) {
+if ($food_table_exists || $cloth_table_exists || $donations_table_exists || table_exists($conn, 'orders')) {
     $queries = [];
     if ($food_table_exists) {
         $queries[] = "SELECT 'food' AS atype, donor_email AS actor, status, created_at, id FROM food_donations";
     }
     if ($cloth_table_exists) {
         $queries[] = "SELECT 'cloth' AS atype, donor_email AS actor, status, created_at, id FROM cloth_donations";
+    }
+    if ($donations_table_exists) {
+        $queries[] = "SELECT category AS atype, donor_email AS actor, status, created_at, id FROM donations";
     }
     if (table_exists($conn, 'orders')) {
         $queries[] = "SELECT 'order' AS atype, buyer_email AS actor, order_status AS status, created_at, id FROM orders";
@@ -185,10 +188,11 @@ if ($food_table_exists || $cloth_table_exists || table_exists($conn, 'orders')) 
 
 // ── Donation status distribution ─────────────────────────────────────────
 $don_statuses = [];
-if ($food_table_exists || $cloth_table_exists) {
+if ($food_table_exists || $cloth_table_exists || $donations_table_exists) {
     $pieces = [];
     if ($food_table_exists) $pieces[] = "SELECT status FROM food_donations";
     if ($cloth_table_exists) $pieces[] = "SELECT status FROM cloth_donations";
+    if ($donations_table_exists) $pieces[] = "SELECT status FROM donations";
     if (!empty($pieces)) {
         $don_statuses = $conn->query("SELECT status,COUNT(*) c FROM (" . implode(' UNION ALL ', $pieces) . ") x GROUP BY status ORDER BY c DESC")->fetch_all(MYSQLI_ASSOC);
     }
