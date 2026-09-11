@@ -1655,3 +1655,208 @@ a,button,.nav-btn,.nav-item,.wb-btn,.vwb-btn,.swb-btn,
 .kpi-card,.vkpi,.skpi,.pm-card,.vdon-card,.prod-card{
   -webkit-tap-highlight-color:transparent;
 }
+
+/* ═══════════════════════════════════════════════════════
+   Enhanced UI & UX Components v3.5 (Tailored by Role)
+   ═══════════════════════════════════════════════════════ */
+
+/* ── 1. Donor Category Quick-Launcher ── */
+.quick-cat-wrap {
+  margin-bottom: 24px;
+}
+.quick-cat-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.quick-cat-head h3 {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--navy);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.quick-cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+.quick-cat-tile {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: var(--text);
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s var(--ease);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+.quick-cat-tile:hover {
+  transform: translateY(-3px);
+  border-color: var(--teal);
+  box-shadow: 0 8px 24px rgba(0,109,119,0.15);
+  background: #fdfefe;
+}
+.quick-cat-tile .qc-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+.quick-cat-tile .qc-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy);
+  text-align: center;
+  white-space: nowrap;
+}
+.quick-cat-tile .qc-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: rgba(0,109,119,.08);
+  color: var(--teal);
+}
+
+/* ── 2. Live Pickup & Volunteer Contact Chips ── */
+.pulse-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: #d1fae5;
+  color: #065f46;
+}
+.pulse-dot-live {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: pulseDot 1.5s infinite;
+}
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+  50% { opacity: 0.8; transform: scale(1.2); box-shadow: 0 0 0 4px rgba(16,185,129,0); }
+}
+
+.vol-contact-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  text-decoration: none;
+  transition: .2s;
+}
+.vol-contact-chip:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+.btn-receipt-modern {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(0,109,119,.1);
+  color: var(--teal);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid rgba(0,109,119,.2);
+  transition: .2s;
+}
+.btn-receipt-modern:hover {
+  background: var(--teal);
+  color: #fff;
+}
+
+/* ── 3. Volunteer Field Navigation & Action Buttons ── */
+.btn-field-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: #006D77;
+  color: #ffffff !important;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: .2s;
+  flex: 1;
+  min-width: 100px;
+}
+.btn-field-nav:hover {
+  background: #00565e;
+  transform: translateY(-1px);
+}
+.btn-field-call {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #1e293b !important;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid #cbd5e1;
+  transition: .2s;
+  flex: 1;
+  min-width: 100px;
+}
+.btn-field-call:hover {
+  background: #e2e8f0;
+  color: #0f172a !important;
+  transform: translateY(-1px);
+}
+
+/* ── 4. Interactive History Search ── */
+.track-search-wrap {
+  position: relative;
+  margin-bottom: 16px;
+}
+.track-search-input {
+  width: 100%;
+  padding: 12px 16px 12px 42px;
+  border: 1.5px solid var(--border);
+  border-radius: 50px;
+  font-size: 13px;
+  background: #fff;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+  font-family: inherit;
+}
+.track-search-input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(0,109,119,0.12);
+}
+.track-search-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+  color: var(--muted);
+  pointer-events: none;
+}

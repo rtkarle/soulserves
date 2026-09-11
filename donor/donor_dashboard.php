@@ -487,8 +487,63 @@ if($success && $don_id): ?>
   </div>
 </div>
 
+<!-- ══ QUICK CATEGORY LAUNCHER ══ -->
+<div class="quick-cat-wrap">
+  <div class="quick-cat-head">
+    <h3>✨ What would you like to give today?</h3>
+    <span style="font-size:12px;color:var(--muted)">1-tap instant donation</span>
+  </div>
+  <div class="quick-cat-grid">
+    <a href="donate.php?cat=food" class="quick-cat-tile">
+      <span class="qc-icon">🍱</span>
+      <span class="qc-label">Food & Meals</span>
+      <span class="qc-badge">High Need</span>
+    </a>
+    <a href="donate.php?cat=clothes" class="quick-cat-tile">
+      <span class="qc-icon">👕</span>
+      <span class="qc-label">Clothes & Shoes</span>
+      <span class="qc-badge">Popular</span>
+    </a>
+    <a href="donate.php?cat=study_material" class="quick-cat-tile">
+      <span class="qc-icon">📚</span>
+      <span class="qc-label">Books & Study</span>
+      <span class="qc-badge">Education</span>
+    </a>
+    <a href="donate.php?cat=school_supplies" class="quick-cat-tile">
+      <span class="qc-icon">🎒</span>
+      <span class="qc-label">School Bags</span>
+      <span class="qc-badge">Kids</span>
+    </a>
+    <a href="donate.php?cat=toys" class="quick-cat-tile">
+      <span class="qc-icon">🧸</span>
+      <span class="qc-label">Toys & Games</span>
+      <span class="qc-badge">Smiles</span>
+    </a>
+    <a href="donate.php?cat=medicines" class="quick-cat-tile">
+      <span class="qc-icon">💊</span>
+      <span class="qc-label">Medicines</span>
+      <span class="qc-badge">Essential</span>
+    </a>
+    <a href="donate.php?cat=electronics" class="quick-cat-tile">
+      <span class="qc-icon">📱</span>
+      <span class="qc-label">Electronics</span>
+      <span class="qc-badge">Digital</span>
+    </a>
+    <a href="donate.php?cat=furniture" class="quick-cat-tile">
+      <span class="qc-icon">🪑</span>
+      <span class="qc-label">Furniture</span>
+      <span class="qc-badge">Home</span>
+    </a>
+    <a href="donate.php?cat=other" class="quick-cat-tile">
+      <span class="qc-icon">📦</span>
+      <span class="qc-label">Other Essentials</span>
+      <span class="qc-badge">Any Help</span>
+    </a>
+  </div>
+</div>
+
 <!-- ══ KPI CARDS ══ -->
-<div class="kpi-row">
+<div class="kpi-row" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
   <div class="kpi-card c1">
     <div class="kpi-icon" style="background:rgba(0,109,119,.1)">🎁</div>
     <div class="kpi-val" data-count="<?=$total?>" data-suffix=""><?=$total?></div>
@@ -503,6 +558,11 @@ if($success && $don_id): ?>
     <div class="kpi-icon" style="background:rgba(37,99,235,.1)">👕</div>
     <div class="kpi-val" data-count="<?=$cloth?>" data-suffix=""><?=$cloth?></div>
     <div class="kpi-label">Clothing</div>
+  </div>
+  <div class="kpi-card c4">
+    <div class="kpi-icon" style="background:rgba(123,44,191,.1)">📦</div>
+    <div class="kpi-val" data-count="<?=$other_don?>" data-suffix=""><?=$other_don?></div>
+    <div class="kpi-label">Supplies & Other</div>
   </div>
   <div class="kpi-card c4">
     <div class="kpi-icon" style="background:rgba(46,139,87,.1)">🌍</div>
@@ -593,7 +653,10 @@ if($success && $don_id): ?>
       <span style="font-size:10px;font-weight:700;background:#fff3e0;color:#92400e;padding:3px 10px;border-radius:20px">⏱ AI ETA: ~<?=htmlspecialchars($eta['eta_human'])?></span>
       <?php endif; ?>
     </div>
-    <span class="pill <?=htmlspecialchars($d['status'])?>"><?=ucfirst(str_replace('_',' ',$d['status']))?></span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="pulse-badge"><span class="pulse-dot-live"></span> Live</span>
+      <span class="pill <?=htmlspecialchars($d['status'])?>"><?=ucfirst(str_replace('_',' ',$d['status']))?></span>
+    </div>
   </div>
   <div class="track-meta">
     <span>📦 <?=htmlspecialchars($d['quantity']??'—')?></span>
@@ -615,10 +678,12 @@ if($success && $don_id): ?>
     <?php if($i<count($STATUS_STEPS)-1): ?><div class="tl-line <?=$done?'done':''?>"></div><?php endif; ?>
     <?php endforeach; ?>
   </div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-    <a href="../api/donation_receipt.php?id=<?=urlencode($d['don_id']??$d['id'])?>&type=<?=urlencode($cat_key)?>" target="_blank" class="receipt-link">🖨️ Receipt</a>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center;padding-top:12px;border-top:1px solid #f1f5f9">
+    <a href="../api/donation_receipt.php?id=<?=urlencode($d['don_id']??$d['id'])?>&type=<?=urlencode($cat_key)?>" target="_blank" class="btn-receipt-modern">🖨️ Download Official Receipt</a>
     <?php if(!empty($d['volunteer_email'])): ?>
-    <span style="font-size:11px;color:var(--muted);padding:5px 0">🤝 Volunteer: <?=htmlspecialchars($d['volunteer_email'])?></span>
+    <a href="mailto:<?=htmlspecialchars($d['volunteer_email'])?>" class="vol-contact-chip" title="Contact assigned volunteer">
+      🤝 Volunteer: <strong><?=htmlspecialchars($d['volunteer_email'])?></strong>
+    </a>
     <?php endif; ?>
   </div>
 </div>
