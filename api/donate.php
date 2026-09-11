@@ -26,6 +26,7 @@ try {
         pickup_address  TEXT NOT NULL,
         contact         VARCHAR(20)  NOT NULL,
         pickup_date     DATE,
+        pickup_time     TIME DEFAULT NULL,
         image           VARCHAR(600),
         status          ENUM('pending','accepted','rejected','scheduled',
                              'out_for_pickup','picked_up','delivered')
@@ -51,6 +52,11 @@ try {
 } catch (Throwable $e) {
     error_log("[donate] Table: " . $e->getMessage());
 }
+
+// Make donation_id nullable if existing table had NOT NULL without default
+try { $conn->query("ALTER TABLE donations MODIFY COLUMN donation_id VARCHAR(30) DEFAULT NULL"); } catch (Throwable $e) {}
+try { $conn->query("ALTER TABLE donations ADD COLUMN delivery_proof VARCHAR(400) DEFAULT NULL"); } catch (Throwable $e) {}
+try { $conn->query("ALTER TABLE donations ADD COLUMN pickup_time TIME DEFAULT NULL"); } catch (Throwable $e) {}
 
 /* ── Validate category ── */
 $allowed_cats = ['food','clothes','study_material','school_supplies',
@@ -125,6 +131,15 @@ switch ($category) {
         break;
 }
 
+/* ── Sanitize ENUM values to match DB schema ── */
+$allowed_conditions = ['new','like_new','good','fair','worn'];
+if (!in_array($condition_type, $allowed_conditions, true)) $condition_type = 'good';
+// Map like_new → new for older DB schemas
+$condition_db = $condition_type === 'like_new' ? 'new' : $condition_type;
+
+$allowed_working = ['working','partially_working','not_working'];
+if (!in_array($working_status, $allowed_working, true)) $working_status = 'working';
+
 /* ── Upload images to Cloudinary (up to 3, all optional) ── */
 $uploadDir = __DIR__ . '/../uploads/';
 $uploaded_images = [];
@@ -138,23 +153,33 @@ foreach (['image', 'image2', 'image3'] as $field) {
 }
 $image_str = !empty($uploaded_images) ? implode(',', $uploaded_images) : null;
 
+/* ── Generate unique donation ID beforehand to guarantee valid NOT NULL column ── */
+$pfx_map = [
+    'food'=>'FOOD', 'clothes'=>'CLO', 'study_material'=>'STDY',
+    'school_supplies'=>'SCHL', 'toys'=>'TOY', 'medicines'=>'MED',
+    'electronics'=>'ELEC', 'furniture'=>'FURN', 'other'=>'OTH',
+];
+$pfx = $pfx_map[$category] ?? 'DON';
+$initial_don_id = 'DON-' . $pfx . '-' . date('ymd') . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 5));
+$don_id_s = mysqli_real_escape_string($conn, $initial_don_id);
+
 /* ── Build INSERT using null-safe helper ── */
 /* Convert all values to safe strings; NULL stays NULL */
 $me_s   = mysqli_real_escape_string($conn, $donor_email);
 $cat_s  = mysqli_real_escape_string($conn, $category);
-$qty_s  = mysqli_real_escape_string($conn, $quantity);
+$qty_s  = mysqli_real_escape_string($conn, substr($quantity, 0, 100));
 $desc_s = mysqli_real_escape_string($conn, $description);
-$cond_s = mysqli_real_escape_string($conn, $condition_type);
+$cond_s = mysqli_real_escape_string($conn, $condition_db);
 $addr_s = mysqli_real_escape_string($conn, $pickup_address);
-$cont_s = mysqli_real_escape_string($conn, $contact);
+$cont_s = mysqli_real_escape_string($conn, substr($contact, 0, 20));
 $img_s  = $image_str ? "'" . mysqli_real_escape_string($conn, $image_str) . "'" : 'NULL';
 $not_s  = mysqli_real_escape_string($conn, $notes);
 $pri_s  = mysqli_real_escape_string($conn, $priority);
-$cl_s   = mysqli_real_escape_string($conn, $cloth_type ?? '');
+$cl_s   = mysqli_real_escape_string($conn, substr($cloth_type ?? '', 0, 80));
 $icl    = (int)$is_clean;
-$sg_s   = $subject_grade ? "'" . mysqli_real_escape_string($conn, $subject_grade) . "'" : 'NULL';
-$med_s  = $medicine_type ? "'" . mysqli_real_escape_string($conn, $medicine_type) . "'" : 'NULL';
-$dev_s  = $device_type   ? "'" . mysqli_real_escape_string($conn, $device_type)   . "'" : 'NULL';
+$sg_s   = $subject_grade ? "'" . mysqli_real_escape_string($conn, substr($subject_grade, 0, 100)) . "'" : 'NULL';
+$med_s  = $medicine_type ? "'" . mysqli_real_escape_string($conn, substr($medicine_type, 0, 100)) . "'" : 'NULL';
+$dev_s  = $device_type   ? "'" . mysqli_real_escape_string($conn, substr($device_type, 0, 100))   . "'" : 'NULL';
 $wks_s  = mysqli_real_escape_string($conn, $working_status);
 
 /* Nullable date/int fields */
@@ -166,13 +191,13 @@ $bc_i  = ($book_count  !== null && $book_count  !== '') ? (int)$book_count  : 'N
 
 try {
     $sql = "INSERT INTO donations
-        (donor_email, category, quantity, description, condition_type,
+        (donation_id, donor_email, category, quantity, description, condition_type,
          pickup_address, contact, pickup_date, image, status,
          notes, priority, food_time, safe_hours, cloth_type,
          is_clean, subject_grade, book_count, expiry_date,
          medicine_type, device_type, working_status, created_at)
         VALUES
-        ('$me_s','$cat_s','$qty_s','$desc_s','$cond_s',
+        ('$don_id_s','$me_s','$cat_s','$qty_s','$desc_s','$cond_s',
          '$addr_s','$cont_s',$pd_s,$img_s,'pending',
          '$not_s','$pri_s',$ft_s,$sh_i,'$cl_s',
          $icl,$sg_s,$bc_i,$exp_s,
@@ -190,18 +215,17 @@ try {
     header("Location: ../donor/donate.php?error=server"); exit;
 }
 
-/* ── Generate Donation ID ── */
-$pfx_map = [
-    'food'=>'FOOD', 'clothes'=>'CLO', 'study_material'=>'STDY',
-    'school_supplies'=>'SCHL', 'toys'=>'TOY', 'medicines'=>'MED',
-    'electronics'=>'ELEC', 'furniture'=>'FURN', 'other'=>'OTH',
-];
-$donation_id = 'DON-' . ($pfx_map[$category] ?? 'DON') . '-' . str_pad($new_id, 6, '0', STR_PAD_LEFT);
-
+/* ── Standardize to clean sequential Donation ID ── */
+$donation_id = $initial_don_id;
+$seq_donation_id = 'DON-' . $pfx . '-' . str_pad($new_id, 6, '0', STR_PAD_LEFT);
 try {
     $upd = $conn->prepare("UPDATE donations SET donation_id=? WHERE id=?");
-    $upd->bind_param("si", $donation_id, $new_id);
-    $upd->execute();
+    if ($upd) {
+        $upd->bind_param("si", $seq_donation_id, $new_id);
+        if ($upd->execute()) {
+            $donation_id = $seq_donation_id;
+        }
+    }
 } catch (Throwable $e) {}
 
 /* ── Email notification (non-fatal) ── */

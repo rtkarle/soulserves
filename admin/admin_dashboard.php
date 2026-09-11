@@ -653,9 +653,8 @@ body{ background:var(--bg); color:var(--text); min-height:100vh; }
       <div class="health-box" style="margin-top:16px">
         <div class="hb-title">Platform Health</div>
         <?php
-header('Content-Type: text/html; charset=utf-8');
-        $total_don = $stats['food_total'] + $stats['cloth_total'];
-        $total_del = $stats['food_delivered'] + $stats['cloth_delivered'];
+        $total_don = $stats['food_total'] + $stats['cloth_total'] + ($stats['donations_total'] ?? 0);
+        $total_del = $stats['food_delivered'] + $stats['cloth_delivered'] + ($stats['donations_delivered'] ?? 0);
         $del_rate  = $total_don > 0 ? round($total_del/$total_don*100) : 0;
         foreach([
           ['Total Donations', $total_don,          '#006D77'],
@@ -721,7 +720,9 @@ header('Content-Type: text/html; charset=utf-8');
     ?>
     <tr>
       <td style="font-weight:700;color:var(--muted);font-size:11px;white-space:nowrap">
-        <?=htmlspecialchars($d['donation_id'] ?? 'DON-'.str_pad($d['id'],6,'0',STR_PAD_LEFT))?>
+        <a href="../api/donation_receipt.php?id=<?=urlencode($d['donation_id'] ?? $d['id'])?>&type=<?=urlencode($d['category'] ?? 'other')?>" target="_blank" style="text-decoration:none;color:#006D77;font-weight:700" title="View Official Receipt">
+          <?=htmlspecialchars($d['donation_id'] ?? 'DON-'.str_pad($d['id'],6,'0',STR_PAD_LEFT))?> ↗
+        </a>
       </td>
       <td><span style="background:#f0ede5;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap">
         <?=$cat_icon?> <?=ucfirst(str_replace('_',' ',$d['category']))?>

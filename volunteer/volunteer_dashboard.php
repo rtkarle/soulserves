@@ -55,21 +55,26 @@ try {
 } catch(Throwable $e){}
 
 /* ── Data queries ── */
-$assigned_food=$assigned_cloth=[];
+$assigned_food=$assigned_cloth=$assigned_other=[];
 try{
-    $af=$conn->prepare("SELECT id,'Food' AS type,COALESCE(donation_id,CONCAT('DON-FOOD-',LPAD(id,6,'0'))) AS don_id,quantity,pickup_address,contact,status,created_at,image,donor_email,notes,priority FROM food_donations WHERE volunteer_email=? AND status NOT IN ('delivered','rejected') ORDER BY FIELD(priority,'high','medium','low'),created_at DESC");
+    $af=$conn->prepare("SELECT id,'Food' AS type,'food' AS category,'food_donations' AS tbl_name,COALESCE(donation_id,CONCAT('DON-FOOD-',LPAD(id,6,'0'))) AS don_id,quantity,pickup_address,contact,status,created_at,image,donor_email,notes,priority FROM food_donations WHERE volunteer_email=? AND status NOT IN ('delivered','rejected') ORDER BY FIELD(priority,'high','medium','low'),created_at DESC");
     $af->bind_param("s",$email);$af->execute();$assigned_food=$af->get_result()->fetch_all(MYSQLI_ASSOC);
 }catch(Throwable $e){}
 try{
-    $ac=$conn->prepare("SELECT id,'Cloth' AS type,COALESCE(donation_id,CONCAT('DON-CLO-',LPAD(id,6,'0'))) AS don_id,quantity,pickup_address,contact,status,created_at,image,donor_email,notes,NULL AS priority FROM cloth_donations WHERE volunteer_email=? AND status NOT IN ('delivered','rejected') ORDER BY created_at DESC");
+    $ac=$conn->prepare("SELECT id,'Cloth' AS type,'clothes' AS category,'cloth_donations' AS tbl_name,COALESCE(donation_id,CONCAT('DON-CLO-',LPAD(id,6,'0'))) AS don_id,quantity,pickup_address,contact,status,created_at,image,donor_email,notes,NULL AS priority FROM cloth_donations WHERE volunteer_email=? AND status NOT IN ('delivered','rejected') ORDER BY created_at DESC");
     $ac->bind_param("s",$email);$ac->execute();$assigned_cloth=$ac->get_result()->fetch_all(MYSQLI_ASSOC);
 }catch(Throwable $e){}
-$assigned = array_merge($assigned_food,$assigned_cloth);
+try{
+    $ao=$conn->prepare("SELECT id,CONCAT(UPPER(SUBSTRING(category,1,1)),LOWER(SUBSTRING(category,2))) AS type,category,'donations' AS tbl_name,COALESCE(donation_id,CONCAT('DON-',UPPER(category),'-',LPAD(id,6,'0'))) AS don_id,quantity,pickup_address,contact,status,created_at,image,donor_email,notes,priority FROM donations WHERE volunteer_email=? AND status NOT IN ('delivered','rejected') ORDER BY FIELD(priority,'high','medium','low'),created_at DESC");
+    $ao->bind_param("s",$email);$ao->execute();$assigned_other=$ao->get_result()->fetch_all(MYSQLI_ASSOC);
+}catch(Throwable $e){}
+$assigned = array_merge($assigned_food,$assigned_cloth,$assigned_other);
 
-$comp_food=$comp_cloth=[];
-try{$cf=$conn->prepare("SELECT id,'Food' AS type,quantity,pickup_address,status,created_at,donor_email FROM food_donations WHERE volunteer_email=? AND status='delivered' ORDER BY created_at DESC LIMIT 20");$cf->bind_param("s",$email);$cf->execute();$comp_food=$cf->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
-try{$cc=$conn->prepare("SELECT id,'Cloth' AS type,quantity,pickup_address,status,created_at,donor_email FROM cloth_donations WHERE volunteer_email=? AND status='delivered' ORDER BY created_at DESC LIMIT 20");$cc->bind_param("s",$email);$cc->execute();$comp_cloth=$cc->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
-$completed = array_merge($comp_food,$comp_cloth);
+$comp_food=$comp_cloth=$comp_other=[];
+try{$cf=$conn->prepare("SELECT id,'Food' AS type,'food_donations' AS tbl_name,quantity,pickup_address,status,created_at,donor_email FROM food_donations WHERE volunteer_email=? AND status='delivered' ORDER BY created_at DESC LIMIT 20");$cf->bind_param("s",$email);$cf->execute();$comp_food=$cf->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
+try{$cc=$conn->prepare("SELECT id,'Cloth' AS type,'cloth_donations' AS tbl_name,quantity,pickup_address,status,created_at,donor_email FROM cloth_donations WHERE volunteer_email=? AND status='delivered' ORDER BY created_at DESC LIMIT 20");$cc->bind_param("s",$email);$cc->execute();$comp_cloth=$cc->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
+try{$co=$conn->prepare("SELECT id,CONCAT(UPPER(SUBSTRING(category,1,1)),LOWER(SUBSTRING(category,2))) AS type,'donations' AS tbl_name,quantity,pickup_address,status,created_at,donor_email FROM donations WHERE volunteer_email=? AND status='delivered' ORDER BY created_at DESC LIMIT 20");$co->bind_param("s",$email);$co->execute();$comp_other=$co->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
+$completed = array_merge($comp_food,$comp_cloth,$comp_other);
 usort($completed, fn($a,$b)=>strtotime($b['created_at'])-strtotime($a['created_at']));
 
 $pending_tasks=[];
@@ -507,7 +512,7 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
 <?php else: ?>
 <div class="vdon-grid">
 <?php foreach($assigned as $d):
-  $tbl = ($d['type']==='Food') ? 'food_donations' : 'cloth_donations';
+  $tbl = $d['tbl_name'] ?? (($d['type']==='Food') ? 'food_donations' : 'cloth_donations');
   $img = !empty($d['image']) ? image_url($d['image']) : null;
   $eta_key = $d['id'].'_'.strtolower($d['type']);
   $eta = $etas[$eta_key] ?? [];
@@ -515,7 +520,7 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
 ?>
 <div class="vdon-card">
   <?php if($img): ?><img src="<?=htmlspecialchars($img)?>" alt="" class="vdon-img" loading="lazy">
-  <?php else: ?><div class="vdon-img"><?=$d['type']==='Food'?'🍱':'👕'?></div><?php endif; ?>
+  <?php else: ?><div class="vdon-img"><?=$d['type']==='Food'?'🍱':($d['type']==='Cloth'?'👕':'📦')?></div><?php endif; ?>
   <div class="vdon-body">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <span class="vdon-type <?=$d['type']==='Food'?'food':'cloth'?>"><?=$d['type']?></span>

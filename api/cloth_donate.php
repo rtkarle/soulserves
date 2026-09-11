@@ -27,6 +27,7 @@ $quantity       = trim($_POST['quantity']        ?? '');
 $cloth_type     = trim($_POST['cloth_type']      ?? trim($_POST['cloth_for'] ?? ''));
 $condition_type = in_array($_POST['condition_type']??'', ['new','like_new','good','fair','worn'])
                     ? $_POST['condition_type'] : 'good';
+$condition_db   = ($condition_type === 'like_new') ? 'new' : $condition_type;
 $is_clean       = (int)(!empty($_POST['is_clean']));
 $pickup_address = trim($_POST['pickup_address']  ?? '');
 $contact        = trim($_POST['contact']         ?? '');
@@ -57,7 +58,7 @@ try {
     $is_cl   = (string)$is_clean;
     $stmt->bind_param("sssssssssss",
         $donor_email, $purchase_time, $qty_str, $cloth_type,
-        $condition_type, $is_cl, $pickup_address, $contact, $dbPath, $notes, $pickup_date
+        $condition_db, $is_cl, $pickup_address, $contact, $dbPath, $notes, $pickup_date
     );
     if (!$stmt->execute()) {
         error_log("[cloth_donate] Insert failed: " . $stmt->error);

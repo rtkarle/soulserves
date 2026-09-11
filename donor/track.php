@@ -226,7 +226,10 @@ foreach ($all_donations as $idx => $row):
       <span class="tc-cat" style="background:<?=$cfg['bg']?>;color:<?=$cfg['color']?>"><?=$cfg['icon']?> <?=$cfg['label']?></span>
       <span class="tc-id"><?=htmlspecialchars($don_id)?></span>
     </div>
-    <span class="badge <?=htmlspecialchars($status)?>"><?=ucfirst(str_replace('_',' ',$status))?></span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <a href="../api/donation_receipt.php?id=<?=urlencode($don_id)?>&type=<?=urlencode($cat)?>" target="_blank" style="font-size:11px;padding:4px 10px;background:#e2e8f0;border-radius:20px;text-decoration:none;color:#334155;font-weight:700" title="Print Receipt">🖨️ Receipt</a>
+      <span class="badge <?=htmlspecialchars($status)?>"><?=ucfirst(str_replace('_',' ',$status))?></span>
+    </div>
   </div>
   <div class="tc-row"><span>Quantity:</span><strong><?=htmlspecialchars($row['quantity'] ?? '—')?></strong></div>
   <?php if(!empty($row['description'])): ?>

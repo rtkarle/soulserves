@@ -32,7 +32,8 @@ if (!$id || !in_array($status, $allowed_statuses) || !in_array($table, $allowed_
     header("Location: $ref"); exit;
 }
 
-$row = $conn->query("SELECT donor_email, volunteer_email FROM `$table` WHERE id=$id")->fetch_assoc();
+$res = $conn->query("SELECT * FROM `$table` WHERE id=$id LIMIT 1");
+$row = $res ? $res->fetch_assoc() : null;
 if (!$row) {
     http_response_code(404);
     $ref = $_SERVER['HTTP_REFERER'] ?? '../donor/donor_dashboard.php';
@@ -50,6 +51,20 @@ if ($status === 'scheduled') {
     $pickup_date = trim($_POST['pickup_date']     ?? '');
     $pickup_time = trim($_POST['pickup_time']     ?? '');
     $vol_email   = trim($_POST['volunteer_email'] ?? '');
+
+    // Ensure columns exist on target table
+    try {
+        $chk_pt = $conn->query("SHOW COLUMNS FROM `$table` LIKE 'pickup_time'");
+        if ($chk_pt && $chk_pt->num_rows === 0) {
+            $conn->query("ALTER TABLE `$table` ADD COLUMN pickup_time TIME DEFAULT NULL");
+        }
+    } catch (Throwable $e) {}
+    try {
+        $chk_ve = $conn->query("SHOW COLUMNS FROM `$table` LIKE 'volunteer_email'");
+        if ($chk_ve && $chk_ve->num_rows === 0) {
+            $conn->query("ALTER TABLE `$table` ADD COLUMN volunteer_email VARCHAR(180) DEFAULT NULL");
+        }
+    } catch (Throwable $e) {}
 
     $stmt = $conn->prepare("UPDATE `$table` SET status=?, pickup_date=?, pickup_time=?, volunteer_email=? WHERE id=?");
     $stmt->bind_param("ssssi", $status, $pickup_date, $pickup_time, $vol_email, $id);
@@ -73,8 +88,21 @@ if ($status === 'scheduled') {
     $beneficiary_count = (int)($_POST['beneficiary_count'] ?? 0);
     $delivery_note     = trim($_POST['delivery_note'] ?? '');
 
-    // Build dynamic SQL — include delivery_proof if uploaded
+    // Ensure delivery_proof column exists if proof uploaded
+    $has_proof_col = false;
     if ($proof_path) {
+        try {
+            $chk_dp = $conn->query("SHOW COLUMNS FROM `$table` LIKE 'delivery_proof'");
+            if ($chk_dp && $chk_dp->num_rows === 0) {
+                $conn->query("ALTER TABLE `$table` ADD COLUMN delivery_proof VARCHAR(400) DEFAULT NULL");
+            }
+            $chk_dp2 = $conn->query("SHOW COLUMNS FROM `$table` LIKE 'delivery_proof'");
+            $has_proof_col = ($chk_dp2 && $chk_dp2->num_rows > 0);
+        } catch (Throwable $e) {}
+    }
+
+    // Build dynamic SQL — include delivery_proof if column exists
+    if ($proof_path && $has_proof_col) {
         $stmt = $conn->prepare("UPDATE `$table` SET status=?, delivery_proof=? WHERE id=?");
         $stmt->bind_param("ssi", $status, $proof_path, $id);
     } else {

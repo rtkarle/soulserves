@@ -44,15 +44,20 @@ function stepIndexD(string $s, array $steps):int{$i=array_search($s,$steps);retu
 /* ── counts ── */
 $food  = sc2($conn,"SELECT COUNT(*) c FROM food_donations  WHERE donor_email=?",[$email],"s");
 $cloth = sc2($conn,"SELECT COUNT(*) c FROM cloth_donations WHERE donor_email=?",[$email],"s");
-$total = $food + $cloth;
+$other_don = 0;
+try {
+    $other_don = sc2($conn,"SELECT COUNT(*) c FROM donations WHERE donor_email=?",[$email],"s");
+} catch(Throwable $e){}
+$total = $food + $cloth + $other_don;
 $goal  = 20;
 $pct   = min(100,round($total/max(1,$goal)*100));
 
 /* ── recent & active ── */
-$recent_food=$recent_cloth=[];
-try{$rf=$conn->prepare("SELECT COALESCE(donation_id,CONCAT('DON-FOOD-',LPAD(id,6,'0'))) AS don_id,'Food' AS type,id,quantity,pickup_address,status,created_at,pickup_date,pickup_time,volunteer_email,priority FROM food_donations WHERE donor_email=? ORDER BY created_at DESC LIMIT 10");$rf->bind_param("s",$email);$rf->execute();$recent_food=$rf->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
-try{$rc=$conn->prepare("SELECT COALESCE(donation_id,CONCAT('DON-CLO-',LPAD(id,6,'0'))) AS don_id,'Clothes' AS type,id,quantity,pickup_address,status,created_at,pickup_date,pickup_time,volunteer_email,NULL AS priority FROM cloth_donations WHERE donor_email=? ORDER BY created_at DESC LIMIT 10");$rc->bind_param("s",$email);$rc->execute();$recent_cloth=$rc->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
-$recent = array_merge($recent_food,$recent_cloth);
+$recent_food=$recent_cloth=$recent_other=[];
+try{$rf=$conn->prepare("SELECT COALESCE(donation_id,CONCAT('DON-FOOD-',LPAD(id,6,'0'))) AS don_id,'Food' AS type,'food' AS category,id,quantity,pickup_address,status,created_at,pickup_date,pickup_time,volunteer_email,priority FROM food_donations WHERE donor_email=? ORDER BY created_at DESC LIMIT 10");$rf->bind_param("s",$email);$rf->execute();$recent_food=$rf->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
+try{$rc=$conn->prepare("SELECT COALESCE(donation_id,CONCAT('DON-CLO-',LPAD(id,6,'0'))) AS don_id,'Clothes' AS type,'clothes' AS category,id,quantity,pickup_address,status,created_at,pickup_date,pickup_time,volunteer_email,NULL AS priority FROM cloth_donations WHERE donor_email=? ORDER BY created_at DESC LIMIT 10");$rc->bind_param("s",$email);$rc->execute();$recent_cloth=$rc->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
+try{$ro=$conn->prepare("SELECT COALESCE(donation_id,CONCAT('DON-',UPPER(category),'-',LPAD(id,6,'0'))) AS don_id,CONCAT(UPPER(SUBSTRING(category,1,1)),LOWER(SUBSTRING(category,2))) AS type,category,id,quantity,pickup_address,status,created_at,pickup_date,pickup_time,volunteer_email,priority FROM donations WHERE donor_email=? ORDER BY created_at DESC LIMIT 10");$ro->bind_param("s",$email);$ro->execute();$recent_other=$ro->get_result()->fetch_all(MYSQLI_ASSOC);}catch(Throwable $e){}
+$recent = array_merge($recent_food,$recent_cloth,$recent_other);
 usort($recent,fn($a,$b)=>strtotime($b['created_at'])-strtotime($a['created_at']));
 $recent = array_slice($recent,0,10);
 $active_arr = array_values(array_filter($recent,fn($r)=>!in_array($r['status'],['delivered','rejected'])));
@@ -416,20 +421,28 @@ $STATUS_ICONS =['📝','✅','📅','🚚','📦','🎉'];
 <main class="main">
 <div class="page">
 
-<?php /* ── Success notice ── */ if($success && $don_id): ?>
+<?php /* ── Success notice ── */ 
+$cat_icons = [
+  'food'=>'🍱','clothes'=>'👕','study_material'=>'📚','school_supplies'=>'🎒',
+  'toys'=>'🧸','medicines'=>'💊','electronics'=>'📱','furniture'=>'🪑','other'=>'📦'
+];
+$suc_cat = strtolower($success);
+$suc_icon = $cat_icons[$suc_cat] ?? '🎁';
+$suc_label = ucfirst(str_replace('_',' ',$suc_cat));
+if($success && $don_id): ?>
 <div class="success-notice">
-  <span class="success-notice-icon"><?=$success==='food'?'🍱':'👕'?></span>
+  <span class="success-notice-icon"><?=$suc_icon?></span>
   <div>
     <h4>Donation submitted!</h4>
-    <p><?=$success==='food'?'Food':'Clothing'?> donation received. You'll be notified once verified.</p>
+    <p><?=htmlspecialchars($suc_label)?> donation received. You'll be notified once verified.</p>
     <span class="success-notice-id"><?=htmlspecialchars($don_id)?></span>
-    <br><a href="../api/donation_receipt.php?id=<?=urlencode(preg_replace('/^DON-(FOOD|CLO)-0*/','',htmlspecialchars($don_id)))?>&type=<?=$success?>" target="_blank" class="receipt-link" style="margin-top:8px">🖨️ Download Receipt</a>
+    <br><a href="../api/donation_receipt.php?id=<?=urlencode($don_id)?>&type=<?=urlencode($success)?>" target="_blank" class="receipt-link" style="margin-top:8px">🖨️ Download Receipt</a>
   </div>
 </div>
 <?php elseif($success): ?>
 <div class="success-notice">
-  <span class="success-notice-icon"><?=$success==='food'?'🍱':'👕'?></span>
-  <div><h4>Donation submitted!</h4><p>Pending review. Check the track page for updates.</p></div>
+  <span class="success-notice-icon"><?=$suc_icon?></span>
+  <div><h4>Donation submitted!</h4><p><?=htmlspecialchars($suc_label)?> donation is pending review. Check the track page for updates.</p></div>
 </div>
 <?php endif; ?>
 
@@ -562,9 +575,11 @@ $STATUS_ICONS =['📝','✅','📅','🚚','📦','🎉'];
 </div>
 <div class="track-list">
 <?php foreach(array_slice($active_arr,0,3) as $d):
+  $cat_key = strtolower($d['category'] ?? $d['type']);
+  $c_icon  = $cat_icons[$cat_key] ?? '📦';
+  $isF  = ($cat_key === 'food');
   $sidx = stepIndexD($d['status'],$STATUS_STEPS);
   $p    = round((($sidx+1)/count($STATUS_STEPS))*100);
-  $isF  = $d['type']==='Food';
   // AI ETA for this donation
   $eta  = [];
   try{ $eta = adhaar_ai()->predictETA((int)$d['id'],$isF?'food':'cloth'); }catch(Throwable $e){}
@@ -573,7 +588,7 @@ $STATUS_ICONS =['📝','✅','📅','🚚','📦','🎉'];
   <div class="track-top">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <span class="track-don-id"><?=htmlspecialchars($d['don_id']??('#'.$d['id']))?></span>
-      <span class="track-type <?=$isF?'food':'cloth'?>"><?=$isF?'🍱 Food':'👕 Clothes'?></span>
+      <span class="track-type <?=$isF?'food':'cloth'?>"><?=$c_icon?> <?=htmlspecialchars($d['type'])?></span>
       <?php if(!empty($eta['eta_human'])): ?>
       <span style="font-size:10px;font-weight:700;background:#fff3e0;color:#92400e;padding:3px 10px;border-radius:20px">⏱ AI ETA: ~<?=htmlspecialchars($eta['eta_human'])?></span>
       <?php endif; ?>
@@ -601,7 +616,7 @@ $STATUS_ICONS =['📝','✅','📅','🚚','📦','🎉'];
     <?php endforeach; ?>
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
-    <a href="../api/donation_receipt.php?id=<?=(int)$d['id']?>&type=<?=$isF?'food':'cloth'?>" target="_blank" class="receipt-link">🖨️ Receipt</a>
+    <a href="../api/donation_receipt.php?id=<?=urlencode($d['don_id']??$d['id'])?>&type=<?=urlencode($cat_key)?>" target="_blank" class="receipt-link">🖨️ Receipt</a>
     <?php if(!empty($d['volunteer_email'])): ?>
     <span style="font-size:11px;color:var(--muted);padding:5px 0">🤝 Volunteer: <?=htmlspecialchars($d['volunteer_email'])?></span>
     <?php endif; ?>
@@ -715,14 +730,17 @@ $STATUS_ICONS =['📝','✅','📅','🚚','📦','🎉'];
     <table class="don-table">
       <thead><tr><th>Donation ID</th><th>Type</th><th>Qty</th><th>Date</th><th>Status</th><th>Receipt</th></tr></thead>
       <tbody>
-        <?php foreach(array_slice($recent,0,7) as $r): ?>
+        <?php foreach(array_slice($recent,0,7) as $r):
+          $r_cat  = strtolower($r['category'] ?? $r['type']);
+          $r_icon = $cat_icons[$r_cat] ?? '📦';
+        ?>
         <tr>
           <td><span class="don-id-badge"><?=htmlspecialchars($r['don_id']??('#'.$r['id']))?></span></td>
-          <td><?=$r['type']==='Food'?'🍱 Food':'👕 Clothes'?></td>
+          <td><?=$r_icon?> <?=htmlspecialchars($r['type'])?></td>
           <td><?=htmlspecialchars($r['quantity']??'—')?></td>
           <td style="white-space:nowrap;color:var(--muted)"><?=date('d M Y',strtotime($r['created_at']))?></td>
           <td><span class="pill <?=htmlspecialchars($r['status'])?>"><?=ucfirst(str_replace('_',' ',$r['status']))?></span></td>
-          <td><a href="../api/donation_receipt.php?id=<?=(int)$r['id']?>&type=<?=$r['type']==='Food'?'food':'cloth'?>" target="_blank" class="receipt-link" style="font-size:11px">🖨️</a></td>
+          <td><a href="../api/donation_receipt.php?id=<?=urlencode($r['don_id']??$r['id'])?>&type=<?=urlencode($r_cat)?>" target="_blank" class="receipt-link" style="font-size:11px">🖨️</a></td>
         </tr>
         <?php endforeach; ?>
       </tbody>

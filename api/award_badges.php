@@ -23,10 +23,14 @@ function award_badges($conn, string $email): array {
     $e = mysqli_real_escape_string($conn, $email);
 
     // ── Donation counts ──
-    $food  = (int)$conn->query("SELECT COUNT(*) c FROM food_donations  WHERE donor_email='$e' AND status='delivered'")->fetch_assoc()['c'];
-    $cloth = (int)$conn->query("SELECT COUNT(*) c FROM cloth_donations WHERE donor_email='$e' AND status='delivered'")->fetch_assoc()['c'];
-    $total = $food + $cloth;
-    $food_qty = (int)$conn->query("SELECT COALESCE(SUM(quantity),0) c FROM food_donations WHERE donor_email='$e' AND status='delivered'")->fetch_assoc()['c'];
+    $food  = (int)($conn->query("SELECT COUNT(*) c FROM food_donations  WHERE donor_email='$e' AND status='delivered'")->fetch_assoc()['c'] ?? 0);
+    $cloth = (int)($conn->query("SELECT COUNT(*) c FROM cloth_donations WHERE donor_email='$e' AND status='delivered'")->fetch_assoc()['c'] ?? 0);
+    $other = 0;
+    try {
+        $other = (int)($conn->query("SELECT COUNT(*) c FROM donations WHERE donor_email='$e' AND status='delivered'")->fetch_assoc()['c'] ?? 0);
+    } catch(Throwable $ex){}
+    $total = $food + $cloth + $other;
+    $food_qty = (int)($conn->query("SELECT COALESCE(SUM(quantity),0) c FROM food_donations WHERE donor_email='$e' AND status='delivered'")->fetch_assoc()['c'] ?? 0);
 
     // ── Badge definitions [key, name, emoji, desc, condition] ──
     $definitions = [
@@ -42,7 +46,7 @@ function award_badges($conn, string $email): array {
         ['legend',         'SoulServe Legend',     '🏆', '50 total donations — infinite impact!',        $total >= 50],
         ['consistent',     'Consistent Giver',     '🔄', 'Donated in 3 consecutive months.',             false], // computed below
         ['generous',       'Generous Soul',        '💝', 'Single donation of 100+ servings.',            $food_qty >= 100],
-        ['community_star', 'Community Star',       '🌠', '15+ donations across both types.',             $food >= 5 && $cloth >= 10],
+        ['community_star', 'Community Star',       '🌠', '15+ donations across categories.',             $total >= 15],
     ];
 
     // Check 3 consecutive months
@@ -50,7 +54,8 @@ function award_badges($conn, string $email): array {
         $months_q = $conn->query(
             "SELECT DISTINCT DATE_FORMAT(created_at,'%Y-%m') m
              FROM (SELECT created_at FROM food_donations WHERE donor_email='$e'
-                   UNION ALL SELECT created_at FROM cloth_donations WHERE donor_email='$e') x
+                   UNION ALL SELECT created_at FROM cloth_donations WHERE donor_email='$e'
+                   UNION ALL SELECT created_at FROM donations WHERE donor_email='$e') x
              ORDER BY m DESC LIMIT 3"
         );
         $months = $months_q ? $months_q->fetch_all(MYSQLI_ASSOC) : [];

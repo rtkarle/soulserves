@@ -223,6 +223,10 @@ class AdhaarAI {
     public function predictImpact(): array {
         $food_del  = (int)$this->conn->query("SELECT COALESCE(SUM(quantity),0) c FROM food_donations WHERE status='delivered'")->fetch_assoc()['c'];
         $cloth_del = (int)$this->conn->query("SELECT COALESCE(SUM(quantity),0) c FROM cloth_donations WHERE status='delivered'")->fetch_assoc()['c'];
+        $other_del = 0;
+        try {
+            $other_del = (int)($this->conn->query("SELECT COUNT(*) c FROM donations WHERE status='delivered'")->fetch_assoc()['c'] ?? 0);
+        } catch(Throwable $e){}
         $vols      = (int)$this->conn->query("SELECT COUNT(*) c FROM register WHERE role='volunteer' AND verified=1")->fetch_assoc()['c'];
         $areas     = $this->conn->query("SELECT COUNT(DISTINCT SUBSTRING_INDEX(pickup_address,' ',-1)) c FROM food_donations WHERE status='delivered'")->fetch_assoc()['c'];
 
@@ -230,7 +234,7 @@ class AdhaarAI {
         $people_fed      = (int)($food_del * 3.2);   // avg 3.2 people per food unit
         $co2_saved_kg    = round(($food_del * 2.5) + ($cloth_del * 1.8), 1); // kg CO2 saved
         $water_saved_ltr = round($food_del * 950, 0); // litres of water saved
-        $economic_value  = round(($food_del * 120) + ($cloth_del * 250), 0); // ₹ value
+        $economic_value  = round(($food_del * 120) + ($cloth_del * 250) + ($other_del * 200), 0); // ₹ value
 
         return [
             'people_fed'      => $people_fed,
@@ -239,6 +243,7 @@ class AdhaarAI {
             'economic_value'  => $economic_value,
             'food_delivered'  => $food_del,
             'cloth_delivered' => $cloth_del,
+            'other_delivered' => $other_del,
             'volunteers'      => $vols,
             'areas_covered'   => (int)$areas,
         ];
@@ -293,9 +298,25 @@ class AdhaarAI {
      * Personalised suggestions for a specific donor.
      */
     public function getDonorSuggestions(string $donor_email): array {
-        $food_count  = (int)$this->conn->query("SELECT COUNT(*) c FROM food_donations WHERE donor_email='".mysqli_real_escape_string($this->conn,$donor_email)."'")->fetch_assoc()['c'];
-        $cloth_count = (int)$this->conn->query("SELECT COUNT(*) c FROM cloth_donations WHERE donor_email='".mysqli_real_escape_string($this->conn,$donor_email)."'")->fetch_assoc()['c'];
-        $last_don    = $this->conn->query("SELECT MAX(created_at) last FROM (SELECT created_at FROM food_donations WHERE donor_email='".mysqli_real_escape_string($this->conn,$donor_email)."' UNION ALL SELECT created_at FROM cloth_donations WHERE donor_email='".mysqli_real_escape_string($this->conn,$donor_email)."') x")->fetch_assoc()['last'];
+        $me = mysqli_real_escape_string($this->conn,$donor_email);
+        $food_count  = (int)($this->conn->query("SELECT COUNT(*) c FROM food_donations WHERE donor_email='$me'")->fetch_assoc()['c'] ?? 0);
+        $cloth_count = (int)($this->conn->query("SELECT COUNT(*) c FROM cloth_donations WHERE donor_email='$me'")->fetch_assoc()['c'] ?? 0);
+        $other_count = 0;
+        try {
+            $other_count = (int)($this->conn->query("SELECT COUNT(*) c FROM donations WHERE donor_email='$me'")->fetch_assoc()['c'] ?? 0);
+        } catch(Throwable $e){}
+        $total_count = $food_count + $cloth_count + $other_count;
+
+        $last_don = null;
+        try {
+            $last_don = $this->conn->query(
+                "SELECT MAX(created_at) last FROM (
+                    SELECT created_at FROM food_donations WHERE donor_email='$me'
+                    UNION ALL SELECT created_at FROM cloth_donations WHERE donor_email='$me'
+                    UNION ALL SELECT created_at FROM donations WHERE donor_email='$me'
+                ) x"
+            )->fetch_assoc()['last'];
+        } catch(Throwable $e){}
 
         $suggestions = [];
         $days_since = $last_don ? round((time()-strtotime($last_don))/86400) : 999;
@@ -320,7 +341,11 @@ class AdhaarAI {
         // Impact calculator
         $impact_food  = $food_count * 15;  // avg 15 people fed per food donation
         $impact_cloth = $cloth_count * 3;  // avg 3 people per clothing donation
-        $suggestions[] = ['icon'=>'💚','text'=>"Your <strong>$food_count food + $cloth_count clothing</strong> donations have impacted approximately <strong>".($impact_food+$impact_cloth)." people</strong> so far."];
+        $impact_other = $other_count * 5;  // avg 5 people per other donation
+        $total_impact = $impact_food + $impact_cloth + $impact_other;
+        if ($total_count > 0) {
+            $suggestions[] = ['icon'=>'💚','text'=>"Your <strong>$total_count</strong> donation".($total_count>1?'s have':' has')." impacted approximately <strong>$total_impact people</strong> across communities so far."];
+        }
 
         // Seasonal suggestion
         $month = (int)date('n');

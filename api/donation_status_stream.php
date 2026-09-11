@@ -71,6 +71,19 @@ function fetch_statuses(mysqli $conn, string $email): array {
     if ($food)  while ($r = $food->fetch_assoc())  $rows[] = $r;
     if ($cloth) while ($r = $cloth->fetch_assoc()) $rows[] = $r;
 
+    try {
+        $don = $conn->query(
+            "SELECT COALESCE(donation_id,CONCAT('DON-',UPPER(category),'-',LPAD(id,6,'0'))) AS don_id,
+                    category AS type, id, quantity, status, pickup_address,
+                    pickup_date, pickup_time, volunteer_email, created_at
+             FROM donations
+             WHERE donor_email='$me'
+             ORDER BY created_at DESC
+             LIMIT 20"
+        );
+        if ($don) while ($r = $don->fetch_assoc()) $rows[] = $r;
+    } catch(Throwable $e){}
+
     usort($rows, fn($a,$b) => strtotime($b['created_at']) - strtotime($a['created_at']));
     return $rows;
 }
