@@ -671,6 +671,128 @@ class AdhaarAI {
         return $scored;
     }
 
+    /* ── 9B. AI PROXIMITY BROADCAST TO VOLUNTEERS ─────────────
+     * When a donor submits a donation, extracts location signals (pincode, city)
+     * and broadcasts real-time in-app notifications to all verified volunteers in that area.
+     * Volunteers can claim the task on a First-Come, First-Served (FCFS) basis.
+     */
+    public function broadcastNearbyVolunteers(int $donation_id, string $category, string $pickup_address, string $donor_email, string $quantity = ''): array {
+        // Ensure notifications table exists
+        $this->conn->query("CREATE TABLE IF NOT EXISTS notifications (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_email VARCHAR(180) NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            type VARCHAR(50) NOT NULL DEFAULT 'info',
+            link VARCHAR(255) DEFAULT NULL,
+            is_read TINYINT(1) NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_user_unread (user_email, is_read),
+            INDEX idx_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // Extract 6-digit pincode
+        $donor_pincode = '';
+        if (preg_match('/\b(\d{6})\b/', $pickup_address, $m)) {
+            $donor_pincode = $m[1];
+        }
+
+        // Extract city hint
+        $addr_clean = strtolower($pickup_address);
+        $words = preg_split('/[\s,]+/', $addr_clean);
+        $city_hint = '';
+        foreach (array_reverse($words) as $w) {
+            if (strlen($w) > 3 && !is_numeric($w) && !in_array($w, ['road','street','lane','nagar','colony','near','opp','behind','flat','house','dist','state','india','maharashtra'])) {
+                $city_hint = $w;
+                break;
+            }
+        }
+
+        // Fetch all verified volunteers
+        $vols = $this->conn->query("SELECT email, name, address, COALESCE(mobile,'') mobile FROM register WHERE role='volunteer' AND verified=1")->fetch_all(MYSQLI_ASSOC);
+        if (empty($vols)) return [];
+
+        $cat_labels = [
+            'food'=>'Food 🍱', 'clothes'=>'Clothing 👕', 'study_material'=>'Study Material 📚',
+            'school_supplies'=>'School Supplies 🎒', 'toys'=>'Toys 🧸', 'medicines'=>'Medicines 💊',
+            'electronics'=>'Electronics 📱', 'furniture'=>'Furniture 🪑', 'other'=>'Essentials 📦'
+        ];
+        $cat_title = $cat_labels[$category] ?? (ucfirst(str_replace('_',' ',$category)) . ' 🎁');
+
+        $notified = [];
+        $candidates = [];
+
+        foreach ($vols as $v) {
+            $vol_addr = strtolower($v['address'] ?? '');
+            $vol_pin = '';
+            if (preg_match('/\b(\d{6})\b/', $vol_addr, $pm)) {
+                $vol_pin = $pm[1];
+            }
+
+            $proximity = 'district';
+            $score = 40;
+
+            if ($donor_pincode && $vol_pin && $donor_pincode === $vol_pin) {
+                $proximity = 'pincode'; // Tier 1: 0-5 km
+                $score = 100;
+            } elseif ($donor_pincode && $vol_pin && substr($donor_pincode, 0, 4) === substr($vol_pin, 0, 4)) {
+                $proximity = 'subdistrict'; // Tier 2: 5-15 km
+                $score = 80;
+            } elseif ($city_hint && strpos($vol_addr, $city_hint) !== false) {
+                $proximity = 'city'; // Tier 3: Same city
+                $score = 70;
+            } elseif ($donor_pincode && $vol_pin && substr($donor_pincode, 0, 3) === substr($vol_pin, 0, 3)) {
+                $proximity = 'district';
+                $score = 60;
+            }
+
+            $candidates[] = [
+                'email' => $v['email'],
+                'name'  => $v['name'],
+                'score' => $score,
+                'proximity' => $proximity
+            ];
+        }
+
+        // Sort candidates by proximity score descending
+        usort($candidates, fn($a, $b) => $b['score'] <=> $a['score']);
+
+        // Select top candidates (at least all matching city/district, max 20)
+        $targets = array_filter($candidates, fn($c) => $c['score'] >= 50);
+        if (empty($targets)) {
+            $targets = array_slice($candidates, 0, 10); // fallback broadcast to available volunteers
+        } else {
+            $targets = array_slice($targets, 0, 20);
+        }
+
+        $area_label = $city_hint ? ucfirst($city_hint) : ($donor_pincode ?: 'your area');
+        $notif_title = "⚡ New {$cat_title} Donation Nearby!";
+        $notif_msg = "A donor in {$area_label} just donated {$quantity} ({$cat_title}). Tap to claim this pickup task (First-Come, First-Served)!";
+        $link = "volunteer_dashboard.php?tab=nearby&claim_id={$donation_id}&cat=" . urlencode($category);
+
+        $stmt = $this->conn->prepare("INSERT INTO notifications (user_email, title, message, type, link) VALUES (?, ?, ?, 'donation_nearby', ?)");
+
+        foreach ($targets as $t) {
+            $em = $t['email'];
+            $stmt->bind_param("ssss", $em, $notif_title, $notif_msg, $link);
+            $stmt->execute();
+            $notified[] = $em;
+        }
+
+        // Log AI proximity dispatch
+        $this->log('volunteer_proximity_broadcast', [
+            'donation_id' => $donation_id,
+            'category'    => $category,
+            'pincode'     => $donor_pincode,
+            'city_hint'   => $city_hint,
+            'matched_count' => count($notified)
+        ], [
+            'notified_volunteers' => array_column($targets, 'email')
+        ], 90, 'ai_proximity_engine');
+
+        return $notified;
+    }
+
     /* ── 10. LOG SEARCH / VIEW ───────────────────────────────
      * Tracks search queries and product views for recommendations.
      */

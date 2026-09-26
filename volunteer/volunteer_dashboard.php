@@ -83,6 +83,66 @@ try{$tq2=$conn->prepare("SELECT vt.* FROM volunteer_tasks vt WHERE vt.volunteer_
 $peers=[];
 try{$pvq=$conn->query("SELECT name,email,mobile,address FROM register WHERE role='volunteer' AND verified=1 AND email!='$me' ORDER BY name LIMIT 20");$peers=$pvq?$pvq->fetch_all(MYSQLI_ASSOC):[];}catch(Throwable $e){}
 
+/* ── Available Nearby Donations for FCFS Claiming ── */
+$vol_addr = strtolower($user['address'] ?? '');
+$vol_pin = '';
+if (preg_match('/\b(\d{6})\b/', $vol_addr, $pm)) $vol_pin = $pm[1];
+$vol_words = preg_split('/[\s,]+/', $vol_addr);
+$vol_city = '';
+foreach (array_reverse($vol_words) as $w) {
+    if (strlen($w) > 3 && !is_numeric($w) && !in_array($w, ['road','street','lane','nagar','colony','near','opp','behind','flat','house','dist','state','india','maharashtra'])) {
+        $vol_city = $w; break;
+    }
+}
+
+$nearby_pool = [];
+try {
+    $nq1 = $conn->query("SELECT id, 'donations' AS tbl, category, quantity, description, pickup_address, priority, created_at, image 
+                         FROM donations 
+                         WHERE (volunteer_email IS NULL OR volunteer_email = '') AND status IN ('pending','accepted')
+                         ORDER BY FIELD(priority,'high','medium','low'), created_at DESC LIMIT 25");
+    if ($nq1) while ($row = $nq1->fetch_assoc()) $nearby_pool[] = $row;
+} catch(Throwable $e) {}
+try {
+    $nq2 = $conn->query("SELECT id, 'food_donations' AS tbl, 'food' AS category, quantity, 'Fresh Prepared Meals' AS description, pickup_address, priority, created_at, image 
+                         FROM food_donations 
+                         WHERE (volunteer_email IS NULL OR volunteer_email = '') AND status IN ('pending','accepted')
+                         ORDER BY FIELD(priority,'high','medium','low'), created_at DESC LIMIT 15");
+    if ($nq2) while ($row = $nq2->fetch_assoc()) $nearby_pool[] = $row;
+} catch(Throwable $e) {}
+try {
+    $nq3 = $conn->query("SELECT id, 'cloth_donations' AS tbl, 'clothes' AS category, CONCAT(quantity, ' pieces') AS quantity, cloth_type AS description, pickup_address, 'medium' AS priority, created_at, image 
+                         FROM cloth_donations 
+                         WHERE (volunteer_email IS NULL OR volunteer_email = '') AND status IN ('pending','accepted')
+                         ORDER BY created_at DESC LIMIT 15");
+    if ($nq3) while ($row = $nq3->fetch_assoc()) $nearby_pool[] = $row;
+} catch(Throwable $e) {}
+
+foreach ($nearby_pool as &$item) {
+    $paddr = strtolower($item['pickup_address'] ?? '');
+    $ppin = '';
+    if (preg_match('/\b(\d{6})\b/', $paddr, $m)) $ppin = $m[1];
+    
+    if ($vol_pin && $ppin && $vol_pin === $ppin) {
+        $item['prox_badge'] = '<span class="badge-proximity badge-prox-close">🎯 Same Pincode (0-5 km)</span>';
+        $item['prox_score'] = 100;
+    } elseif ($vol_pin && $ppin && substr($vol_pin,0,4) === substr($ppin,0,4)) {
+        $item['prox_badge'] = '<span class="badge-proximity badge-prox-close">📍 Sub-District (5-15 km)</span>';
+        $item['prox_score'] = 80;
+    } elseif ($vol_city && strpos($paddr, $vol_city) !== false) {
+        $item['prox_badge'] = '<span class="badge-proximity badge-prox-city">🏙️ Same City (~' . ucfirst($vol_city) . ')</span>';
+        $item['prox_score'] = 75;
+    } elseif ($vol_pin && $ppin && substr($vol_pin,0,3) === substr($ppin,0,3)) {
+        $item['prox_badge'] = '<span class="badge-proximity badge-prox-dist">🗺️ Same District</span>';
+        $item['prox_score'] = 60;
+    } else {
+        $item['prox_badge'] = '<span class="badge-proximity badge-prox-dist">🌐 Vicinity Area</span>';
+        $item['prox_score'] = 40;
+    }
+}
+unset($item);
+usort($nearby_pool, fn($a, $b) => $b['prox_score'] <=> $a['prox_score']);
+
 /* ── Combine cart + order counts ── */
 $shop_counts = $conn->query("SELECT
     (SELECT COUNT(*) FROM cart   WHERE user_email='$me')   AS cart_count,
@@ -331,11 +391,28 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
 <div class="mobile-topbar">
   <div style="padding:0 16px;height:58px;display:flex;align-items:center;justify-content:space-between">
     <img src="../assets/logo.png" alt="SoulServe" style="height:30px;object-fit:contain" loading="eager">
-    <button class="hamburger" id="hamburger" aria-label="Menu" style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:8px;background:none;border:none">
-      <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
-      <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
-      <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
-    </button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <!-- Notification Bell -->
+      <div class="notif-bell-wrap" id="notifBellWrap">
+        <button type="button" class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifs()" aria-label="Notifications">
+          🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span>
+        </button>
+        <div class="notif-dropdown" id="notifDropdown">
+          <div class="notif-hdr">
+            <span>Nearby Alerts</span>
+            <button type="button" onclick="markAllNotifsRead()" style="background:none;border:none;color:var(--teal);font-size:11px;font-weight:700;cursor:pointer">Mark all read</button>
+          </div>
+          <div class="notif-list" id="notifList">
+            <div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Loading alerts...</div>
+          </div>
+        </div>
+      </div>
+      <button class="hamburger" id="hamburger" aria-label="Menu" style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:8px;background:none;border:none">
+        <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
+        <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
+        <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
+      </button>
+    </div>
   </div>
 </div>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -353,6 +430,7 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
   </div>
   <div class="nav-sec">Pickups</div>
   <button class="nav-btn <?=$tab==='overview'?'active':''?>" data-tab="overview" onclick="openTab('overview')">🏠 Overview</button>
+  <button class="nav-btn <?=$tab==='nearby'?'active':''?>" data-tab="nearby" onclick="openTab('nearby')"><span style="font-size:15px">⚡</span> Nearby Claim (FCFS) <?php if(count($nearby_pool)>0):?><span class="nav-badge orange"><?=count($nearby_pool)?></span><?php endif;?></button>
   <button class="nav-btn <?=$tab==='assigned'?'active':''?>" data-tab="assigned" onclick="openTab('assigned')">📦 Assigned<?php if(count($assigned)>0):?><span class="nav-badge green"><?=count($assigned)?></span><?php endif;?></button>
   <button class="nav-btn <?=$tab==='tasks'?'active':''?>" data-tab="tasks" onclick="openTab('tasks')">📋 Task Requests<?php if(count($pending_tasks)>0):?><span class="nav-badge"><?=count($pending_tasks)?></span><?php endif;?></button>
   <button class="nav-btn <?=$tab==='route'?'active':''?>" data-tab="route" onclick="openTab('route')">🗺️ AI Route</button>
@@ -383,7 +461,8 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
     <div class="vwb-sub"><?=count($assigned)?> active · <?=count($completed)?> completed · Impact Score <?=$impact_score?>/100</div>
   </div>
   <div class="vwb-btns">
-    <button class="vwb-btn white" onclick="openTab('assigned')">📦 Active Tasks</button>
+    <button class="vwb-btn white" onclick="openTab('nearby')">⚡ Claim Nearby Tasks (<?=count($nearby_pool)?>)</button>
+    <button class="vwb-btn glass" onclick="openTab('assigned')">📦 Active Pickups</button>
     <button class="vwb-btn glass" onclick="openTab('route')">🗺️ AI Route</button>
     <button class="vwb-btn glass" onclick="document.getElementById('sosModal').style.display='flex'">🆘 SOS</button>
   </div>
@@ -417,6 +496,60 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
     <div class="vkpi-label">Badges</div>
   </div>
 </div>
+
+<!-- ══ NEARBY AVAILABLE DONATIONS (FCFS POOL) ══ -->
+<div class="nearby-claim-banner">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+    <div>
+      <h3>⚡ Available Nearby Donations (First-Come, First-Served)</h3>
+      <p>Donations in your area waiting for pickup. The first volunteer to accept is assigned the task!</p>
+    </div>
+    <button type="button" class="sw-btn white" onclick="openTab('nearby')" style="background:#fff;color:#006d77;border:none;padding:8px 18px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer">View All (<?=count($nearby_pool)?>) →</button>
+  </div>
+</div>
+
+<?php if(empty($nearby_pool)): ?>
+<div class="empty-state" style="margin-bottom:24px;padding:26px">
+  <span class="emoji" style="font-size:32px">✨</span>
+  <p style="margin:0;font-size:13px">No unclaimed donations in your immediate area right now. When a donor nearby contributes, an instant alert will appear here!</p>
+</div>
+<?php else: ?>
+<div class="nearby-claim-grid">
+  <?php foreach(array_slice($nearby_pool, 0, 4) as $item): 
+    $cat = $item['category'] ?? 'other';
+    $cat_icons = ['food'=>'🍱','clothes'=>'👕','study_material'=>'📚','school_supplies'=>'🎒','toys'=>'🧸','medicines'=>'💊','electronics'=>'📱','furniture'=>'🪑','other'=>'📦'];
+    $icon = $cat_icons[$cat] ?? '🎁';
+    $cat_label = ucfirst(str_replace('_',' ',$cat));
+    $short_addr = htmlspecialchars($item['pickup_address']);
+    $addr_parts = explode(',', $short_addr);
+    $masked_area = count($addr_parts) > 1 ? trim(end($addr_parts)) : $short_addr;
+    $pri = $item['priority'] ?? 'medium';
+  ?>
+  <div class="nearby-card" id="nearby-card-<?=$item['tbl']?>-<?=$item['id']?>">
+    <div>
+      <div class="nearby-card-top">
+        <div class="nearby-icon"><?=$icon?></div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:4px">
+            <span style="font-size:13px;font-weight:800;color:var(--navy)"><?=$cat_label?></span>
+            <?=$item['prox_badge']?>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--teal)"><?=htmlspecialchars($item['quantity'])?></div>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px"><?=htmlspecialchars(substr($item['description']?:'Donation ready for collection', 0, 80))?></p>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:5px">
+        <span>📍 Area:</span> <strong><?=htmlspecialchars($masked_area)?></strong>
+        <?php if($pri==='high'): ?><span style="margin-left:auto;font-size:10px;font-weight:700;color:#991b1b;background:#fee2e2;padding:2px 7px;border-radius:12px">🔴 Urgent</span><?php endif; ?>
+      </div>
+    </div>
+    <button type="button" class="btn-claim-task" onclick="claimTask(<?=$item['id']?>, '<?=$item['tbl']?>', '<?=$cat_label?>', '<?=htmlspecialchars(addslashes($masked_area))?>')">
+      ✋ Claim Task (FCFS)
+    </button>
+  </div>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
 
 <!-- Impact Score Ring -->
 <div class="impact-ring-wrap">
@@ -500,6 +633,55 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
 </div>
 
 </div><!-- /tab-overview -->
+
+<!-- ══ TAB: NEARBY CLAIM (FCFS) ══ -->
+<div id="tab-nearby" class="tab-panel <?=$tab==='nearby'?'active':''?>">
+  <div class="sec-head">
+    <h3>⚡ Available Nearby Donations (First-Come, First-Served)</h3>
+    <span class="sec-count"><?=count($nearby_pool)?> Available</span>
+  </div>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:18px">These donations have not yet been assigned to any volunteer. The first volunteer to claim is assigned the task on a First-Come, First-Served basis!</p>
+
+  <?php if(empty($nearby_pool)): ?>
+  <div class="empty-state"><span class="emoji">📭</span><p>No available donations in your immediate area right now. When a donor contributes, an alert will appear here and in your notification bell!</p></div>
+  <?php else: ?>
+  <div class="nearby-claim-grid">
+    <?php foreach($nearby_pool as $item): 
+      $cat = $item['category'] ?? 'other';
+      $cat_icons = ['food'=>'🍱','clothes'=>'👕','study_material'=>'📚','school_supplies'=>'🎒','toys'=>'🧸','medicines'=>'💊','electronics'=>'📱','furniture'=>'🪑','other'=>'📦'];
+      $icon = $cat_icons[$cat] ?? '🎁';
+      $cat_label = ucfirst(str_replace('_',' ',$cat));
+      $short_addr = htmlspecialchars($item['pickup_address']);
+      $addr_parts = explode(',', $short_addr);
+      $masked_area = count($addr_parts) > 1 ? trim(end($addr_parts)) : $short_addr;
+      $pri = $item['priority'] ?? 'medium';
+    ?>
+    <div class="nearby-card" id="nearby-tab-card-<?=$item['tbl']?>-<?=$item['id']?>">
+      <div>
+        <div class="nearby-card-top">
+          <div class="nearby-icon"><?=$icon?></div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:4px">
+              <span style="font-size:13px;font-weight:800;color:var(--navy)"><?=$cat_label?></span>
+              <?=$item['prox_badge']?>
+            </div>
+            <div style="font-size:13px;font-weight:700;color:var(--teal)"><?=htmlspecialchars($item['quantity'])?></div>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px"><?=htmlspecialchars(substr($item['description']?:'Donation ready for collection', 0, 100))?></p>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:5px">
+          <span>📍 Area:</span> <strong><?=htmlspecialchars($masked_area)?></strong>
+          <?php if($pri==='high'): ?><span style="margin-left:auto;font-size:10px;font-weight:700;color:#991b1b;background:#fee2e2;padding:2px 7px;border-radius:12px">🔴 Urgent</span><?php endif; ?>
+        </div>
+      </div>
+      <button type="button" class="btn-claim-task" onclick="claimTask(<?=$item['id']?>, '<?=$item['tbl']?>', '<?=$cat_label?>', '<?=htmlspecialchars(addslashes($masked_area))?>')">
+        ✋ Claim Task (FCFS)
+      </button>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+</div>
 
 <!-- ══ TAB: ASSIGNED ══ -->
 <div id="tab-assigned" class="tab-panel <?=$tab==='assigned'?'active':''?>">
@@ -812,6 +994,128 @@ if(navigator.geolocation && <?=count($assigned)?> > 0){
     })}).catch(()=>{});
   },{enableHighAccuracy:true,maximumAge:30000});
 }
+</script>
+<script src="../js/soulserve-ui.js"></script>
+<script>
+/* ── FCFS Claim Task Function ── */
+function claimTask(donationId, table, categoryName, area) {
+  SoulServeModal.confirm({
+    title: 'Claim Task: ' + categoryName + ' 🚚',
+    text: `Are you sure you want to claim this pickup in <strong>${area}</strong>?<br><br><small style="color:var(--muted)">This task is claimed on a <strong>First-Come, First-Served</strong> basis. Once claimed, you will be assigned to complete the pickup.</small>`,
+    icon: '✋',
+    confirmText: 'Yes, Claim Task 🚚',
+    cancelText: 'Cancel',
+    onConfirm: () => {
+      const formData = new URLSearchParams();
+      formData.append('donation_id', donationId);
+      formData.append('table', table);
+
+      return fetch('../api/claim_task.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          SoulServeModal.celebrate({
+            title: 'Task Claimed! 🎉',
+            message: `You have successfully claimed this <strong>${categoryName}</strong> task. It is now in your Active Pickups.`,
+            donId: data.don_code || '',
+            btnText: 'Go to Active Pickups'
+          });
+          document.getElementById(`nearby-card-${table}-${donationId}`)?.remove();
+          document.getElementById(`nearby-tab-card-${table}-${donationId}`)?.remove();
+          setTimeout(() => { openTab('assigned'); location.reload(); }, 1500);
+        } else if (data.code === 'ALREADY_CLAIMED') {
+          SoulServeModal.confirm({
+            title: 'Already Claimed! ⚡',
+            text: data.message,
+            icon: '⚠️',
+            confirmText: 'Got It',
+            cancelText: 'Close'
+          });
+          document.getElementById(`nearby-card-${table}-${donationId}`)?.remove();
+          document.getElementById(`nearby-tab-card-${table}-${donationId}`)?.remove();
+        } else {
+          SoulServeToast.show(data.message || 'Could not claim task.', 'error');
+        }
+      })
+      .catch(err => {
+        SoulServeToast.show('Network error while claiming task.', 'error');
+      });
+    }
+  });
+}
+
+/* ── In-App Notification Drawer ── */
+let notifsLoaded = false;
+function toggleNotifs() {
+  const dd = document.getElementById('notifDropdown');
+  if (!dd) return;
+  dd.classList.toggle('show');
+  if (dd.classList.contains('show') && !notifsLoaded) {
+    loadNotifications();
+  }
+}
+
+function loadNotifications() {
+  fetch('../api/notifications.php')
+    .then(r => r.json())
+    .then(d => {
+      const badge = document.getElementById('notifBadge');
+      if (badge) {
+        if (d.unread_count > 0) {
+          badge.textContent = d.unread_count > 9 ? '9+' : d.unread_count;
+          badge.style.display = 'flex';
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+      const list = document.getElementById('notifList');
+      if (!list) return;
+      if (!d.notifications || d.notifications.length === 0) {
+        list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">No notifications</div>';
+        return;
+      }
+      list.innerHTML = d.notifications.map(n => `
+        <a href="${n.link || '#'}" class="notif-item ${n.is_read == 0 ? 'unread' : ''}" onclick="markNotifRead(${n.id})">
+          <div class="notif-item-title">${n.title}</div>
+          <div>${n.message}</div>
+          <div class="notif-item-time">${n.time_ago}</div>
+        </a>
+      `).join('');
+      notifsLoaded = true;
+    }).catch(() => {});
+}
+
+function markNotifRead(id) {
+  fetch('../api/notifications.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'action=mark_read&id=' + id
+  }).catch(() => {});
+}
+
+function markAllNotifsRead() {
+  fetch('../api/notifications.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'action=mark_all'
+  }).then(() => {
+    document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
+    const badge = document.getElementById('notifBadge');
+    if (badge) badge.style.display = 'none';
+  }).catch(() => {});
+}
+
+window.addEventListener('DOMContentLoaded', loadNotifications);
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('notifBellWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('notifDropdown')?.classList.remove('show');
+  }
+});
 </script>
 <script src="../js/script.js"></script>
 </body>

@@ -26,6 +26,7 @@ try {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/dashboard.css">
 <style>
 :root{--bg:#f5f8f4;--accent:#006D77;--accent2:#2E8B57;--text:#102A43;--muted:#5A7184;--card:#fff;--shadow:0 20px 60px rgba(16,42,67,.12);--radius:22px;--border:#E2EBE9}
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter',sans-serif;-webkit-tap-highlight-color:transparent}
@@ -937,6 +938,37 @@ window.addEventListener('DOMContentLoaded', () => {
 // Mobile menu
 const mt = document.getElementById('menuToggle');
 if (mt) mt.addEventListener('click', () => document.getElementById('mobileMenu')?.classList.toggle('show'));
+</script>
+<script src="../js/soulserve-ui.js"></script>
+<script>
+// Confirm donation submission with interactive popup
+document.getElementById('donateForm')?.addEventListener('submit', function(e) {
+  if (this.dataset.confirmed === 'true') return; // already confirmed
+
+  e.preventDefault();
+  const form = this;
+  const cat = document.getElementById('fieldCategory')?.value || 'food';
+  const qty = document.getElementById('fieldQty')?.value || 'Items';
+  const addr = document.getElementById('fieldAddress')?.value || 'Provided pickup address';
+  const catCfg = (typeof CATS !== 'undefined' && CATS[cat]) ? CATS[cat] : { name: 'Donation', icon: '🎁' };
+
+  SoulServeModal.confirm({
+    title: 'Confirm Donation Pickup? ' + catCfg.icon,
+    text: `You are submitting <strong>${qty}</strong> (${catCfg.name}) for pickup at:<br><strong style="color:var(--text)">${addr}</strong><br><br><small style="color:var(--muted)">Verified volunteers in your area will be immediately notified to claim this pickup on a First-Come, First-Served basis.</small>`,
+    icon: catCfg.icon,
+    confirmText: 'Yes, Submit Donation 🚚',
+    cancelText: 'Edit Details',
+    onConfirm: () => {
+      form.dataset.confirmed = 'true';
+      const btn = document.getElementById('submitBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="ss-spinner"></span> <span>Submitting & Notifying Volunteers...</span>`;
+      }
+      form.submit();
+    }
+  });
+});
 </script>
 </body>
 </html>

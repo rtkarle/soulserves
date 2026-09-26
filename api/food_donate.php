@@ -84,8 +84,13 @@ try {
     sendDonationReceived($donor_email, $donor_name, 'food', $quantity . ' units', $pickup_address);
 } catch (Throwable $e) { error_log("[food_donate] Mail error: " . $e->getMessage()); }
 
-/* ── Invalidate AI cache ── */
-try { require_once __DIR__ . '/../api/ai_engine.php'; ai_cache_clear(); } catch (Throwable $e) {}
+/* ── AI Proximity Broadcast to Nearby Volunteers (FCFS Pool) ── */
+try {
+    require_once __DIR__ . '/../api/ai_engine.php';
+    $ai = adhaar_ai();
+    $ai->broadcastNearbyVolunteers($new_id, 'food', $pickup_address, $donor_email, $quantity . ' meals');
+    ai_cache_clear();
+} catch (Throwable $e) { error_log("[food_donate] AI broadcast error: " . $e->getMessage()); }
 
 header("Location: ../donor/donor_dashboard.php?success=food&don_id=" . urlencode($donation_id));
 exit;

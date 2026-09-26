@@ -237,8 +237,13 @@ try {
     sendDonationReceived($donor_email, $donor_name, $category, $quantity, $pickup_address);
 } catch (Throwable $e) { error_log("[donate] Mail: " . $e->getMessage()); }
 
-/* ── Invalidate AI cache ── */
-try { require_once __DIR__ . '/../api/ai_engine.php'; ai_cache_clear(); } catch (Throwable $e) {}
+/* ── AI Proximity Broadcast to Nearby Volunteers (FCFS Pool) ── */
+try {
+    require_once __DIR__ . '/../api/ai_engine.php';
+    $ai = adhaar_ai();
+    $ai->broadcastNearbyVolunteers($new_id, $category, $pickup_address, $donor_email, $quantity);
+    ai_cache_clear();
+} catch (Throwable $e) { error_log("[donate] AI broadcast: " . $e->getMessage()); }
 
 header("Location: ../donor/donor_dashboard.php?success=" . urlencode($category) . "&don_id=" . urlencode($donation_id));
 exit;

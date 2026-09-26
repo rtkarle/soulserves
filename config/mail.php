@@ -36,6 +36,8 @@ function sendMail(string $to, string $subject, string $body): bool {
         $mail->Subject = $subject;
         $mail->Body    = $body;
         $mail->AltBody = strip_tags(str_replace(['<br>','<br/>'], "\n", $body));
+        $mail->Timeout    = 3; // 3-second connection timeout to keep web requests snappy
+        $mail->Timelimit  = 3;
         $mail->send();
         return true;
     } catch (\Exception $e) {

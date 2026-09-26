@@ -378,12 +378,29 @@ $STATUS_ICONS =['📝','✅','📅','🚚','📦','🎉'];
 <div class="mobile-topbar">
   <div style="padding:0 16px;height:58px;display:flex;align-items:center;justify-content:space-between">
     <img src="../assets/logo.png" alt="SoulServe" style="height:30px;object-fit:contain" loading="eager">
-    <button class="hamburger" id="hamburger" aria-label="Menu" aria-expanded="false"
-      style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:8px;background:none;border:none">
-      <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
-      <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
-      <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
-    </button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <!-- Notification Bell -->
+      <div class="notif-bell-wrap" id="notifBellWrap">
+        <button type="button" class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifs()" aria-label="Notifications">
+          🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span>
+        </button>
+        <div class="notif-dropdown" id="notifDropdown">
+          <div class="notif-hdr">
+            <span>Donation Updates</span>
+            <button type="button" onclick="markAllNotifsRead()" style="background:none;border:none;color:var(--teal);font-size:11px;font-weight:700;cursor:pointer">Mark all read</button>
+          </div>
+          <div class="notif-list" id="notifList">
+            <div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Loading updates...</div>
+          </div>
+        </div>
+      </div>
+      <button class="hamburger" id="hamburger" aria-label="Menu" aria-expanded="false"
+        style="display:flex;flex-direction:column;gap:5px;cursor:pointer;padding:8px;background:none;border:none">
+        <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
+        <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
+        <span style="display:block;width:22px;height:2px;background:var(--navy);border-radius:2px;transition:.3s"></span>
+      </button>
+    </div>
   </div>
 </div>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -905,6 +922,72 @@ function sendChat(q){
     });
 }
 document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat(e.target.value);});
+</script>
+<script src="../js/soulserve-ui.js"></script>
+<script>
+let notifsLoaded = false;
+function toggleNotifs() {
+  const dd = document.getElementById('notifDropdown');
+  if (!dd) return;
+  dd.classList.toggle('show');
+  if (dd.classList.contains('show') && !notifsLoaded) {
+    loadNotifications();
+  }
+}
+function loadNotifications() {
+  fetch('../api/notifications.php')
+    .then(r => r.json())
+    .then(d => {
+      const badge = document.getElementById('notifBadge');
+      if (badge) {
+        if (d.unread_count > 0) {
+          badge.textContent = d.unread_count > 9 ? '9+' : d.unread_count;
+          badge.style.display = 'flex';
+        } else {
+          badge.style.display = 'none';
+        }
+      }
+      const list = document.getElementById('notifList');
+      if (!list) return;
+      if (!d.notifications || d.notifications.length === 0) {
+        list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">No updates yet</div>';
+        return;
+      }
+      list.innerHTML = d.notifications.map(n => `
+        <a href="${n.link || '#'}" class="notif-item ${n.is_read == 0 ? 'unread' : ''}" onclick="markNotifRead(${n.id})">
+          <div class="notif-item-title">${n.title}</div>
+          <div>${n.message}</div>
+          <div class="notif-item-time">${n.time_ago}</div>
+        </a>
+      `).join('');
+      notifsLoaded = true;
+    }).catch(() => {});
+}
+function markNotifRead(id) {
+  fetch('../api/notifications.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'action=mark_read&id=' + id
+  }).catch(() => {});
+}
+function markAllNotifsRead() {
+  fetch('../api/notifications.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'action=mark_all'
+  }).then(() => {
+    document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
+    const badge = document.getElementById('notifBadge');
+    if (badge) badge.style.display = 'none';
+  }).catch(() => {});
+}
+window.addEventListener('DOMContentLoaded', loadNotifications);
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('notifBellWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('notifDropdown')?.classList.remove('show');
+  }
+});
 </script>
 </body>
 </html>
