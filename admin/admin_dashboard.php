@@ -42,14 +42,13 @@ if ($food_table_exists || $cloth_table_exists) {
     }
 }
 
-/* Shop + revenue in one query */
-$shop = $conn->query("SELECT
-    (SELECT COUNT(*) FROM products WHERE is_active=1)       AS total_products,
-    (SELECT COUNT(*) FROM orders)                           AS total_orders,
-    (SELECT COALESCE(SUM(total_amount),0) FROM orders
-       WHERE order_status NOT IN ('cancelled','returned'))  AS revenue,
-    (SELECT COUNT(*) FROM seller_stores)                    AS stores
-  FROM DUAL")->fetch_assoc();
+/* Shop + revenue — separate queries (FROM DUAL removed for MySQL 8.4 compatibility) */
+$shop = [
+    'total_products' => (int)($conn->query("SELECT COUNT(*) c FROM products WHERE is_active=1")->fetch_assoc()['c'] ?? 0),
+    'total_orders'   => (int)($conn->query("SELECT COUNT(*) c FROM orders")->fetch_assoc()['c'] ?? 0),
+    'revenue'        => (float)($conn->query("SELECT COALESCE(SUM(total_amount),0) r FROM orders WHERE order_status NOT IN ('cancelled','returned')")->fetch_assoc()['r'] ?? 0),
+    'stores'         => (int)($conn->query("SELECT COUNT(*) c FROM seller_stores")->fetch_assoc()['c'] ?? 0),
+];
 
 $stats = array_merge(
     ['total_users'=>(int)$usr['total_users'],'donors'=>(int)$usr['donors'],

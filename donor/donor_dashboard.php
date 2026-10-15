@@ -878,7 +878,129 @@ document.querySelectorAll('img[data-src]').forEach(img=>{
   new IntersectionObserver(([e],o)=>{if(e.isIntersecting){img.src=img.dataset.src;img.removeAttribute('data-src');o.disconnect();}},{rootMargin:'200px'}).observe(img);
 });
 <?php if($success&&$don_id): ?>
-window.addEventListener('load',()=>{ if(typeof showToast==='function') showToast('Donation <?=htmlspecialchars($don_id)?> submitted!','success',5000); });
+window.addEventListener('load', () => {
+  const catLabels = {
+    food:'🍱 Food', clothes:'👕 Clothes', study_material:'📚 Study Material',
+    school_supplies:'🎒 School Supplies', toys:'🧸 Toys', medicines:'💊 Medicines',
+    electronics:'📱 Electronics', furniture:'🪑 Furniture', other:'📦 Other'
+  };
+  const cat = '<?=htmlspecialchars($success)?>';
+  const donId = '<?=htmlspecialchars($don_id)?>';
+  const label = catLabels[cat] || '🎁 Donation';
+
+  // Create popup card
+  const overlay = document.createElement('div');
+  overlay.id = 'donSuccessOverlay';
+  overlay.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;
+    display:flex;align-items:center;justify-content:center;padding:20px;
+    backdrop-filter:blur(6px);animation:fadeInBg .3s ease;
+  `;
+
+  overlay.innerHTML = `
+    <div style="
+      background:#fff;border-radius:28px;padding:40px 36px;max-width:420px;width:100%;
+      box-shadow:0 32px 80px rgba(0,0,0,.25);text-align:center;
+      animation:popIn .4s cubic-bezier(.22,1,.36,1);position:relative;
+    ">
+      <!-- Confetti dots -->
+      <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:28px;letter-spacing:6px">🎊 🎉 🎊</div>
+
+      <!-- Success icon -->
+      <div style="
+        width:80px;height:80px;border-radius:50%;
+        background:linear-gradient(135deg,#006D77,#2E8B57);
+        display:flex;align-items:center;justify-content:center;
+        margin:16px auto 20px;box-shadow:0 12px 32px rgba(0,109,119,.3);
+        font-size:36px;animation:bounceIn .6s .2s both;
+      ">✅</div>
+
+      <!-- Title -->
+      <h2 style="font-size:22px;font-weight:900;color:#102A43;margin-bottom:8px;letter-spacing:-.3px">
+        Donation Submitted!
+      </h2>
+      <p style="font-size:14px;color:#5A7184;margin-bottom:24px;line-height:1.6">
+        Your <strong>${label}</strong> donation has been received.<br>
+        We'll review and schedule a pickup shortly. 🙏
+      </p>
+
+      <!-- Donation ID badge -->
+      <div style="
+        background:linear-gradient(135deg,rgba(0,109,119,.08),rgba(46,139,87,.06));
+        border:1.5px solid rgba(0,109,119,.2);border-radius:14px;
+        padding:14px 20px;margin-bottom:24px;
+      ">
+        <div style="font-size:11px;font-weight:700;color:#5A7184;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">Donation ID</div>
+        <div style="font-size:18px;font-weight:900;color:#006D77;font-family:monospace;letter-spacing:1px">${donId}</div>
+      </div>
+
+      <!-- Status steps preview -->
+      <div style="display:flex;justify-content:center;gap:0;margin-bottom:28px">
+        ${['Submitted','Review','Scheduled','Pickup','Delivered'].map((s,i)=>`
+          <div style="display:flex;flex-direction:column;align-items:center;flex:1">
+            <div style="
+              width:28px;height:28px;border-radius:50%;font-size:11px;font-weight:800;
+              display:flex;align-items:center;justify-content:center;
+              background:${i===0?'linear-gradient(135deg,#006D77,#2E8B57)':'#E2EBE9'};
+              color:${i===0?'#fff':'#94A3B8'};
+              box-shadow:${i===0?'0 4px 12px rgba(0,109,119,.3)':'none'};
+            ">${i===0?'✓':i+1}</div>
+            <div style="font-size:9px;color:${i===0?'#006D77':'#94A3B8'};margin-top:4px;font-weight:${i===0?700:400}">${s}</div>
+            ${i<4?`<div style="position:relative;margin-bottom:16px"></div>`:''}
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Buttons -->
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('donSuccessOverlay').remove()" style="
+          flex:1;padding:13px;border:2px solid #E2EBE9;border-radius:12px;
+          background:#fff;color:#5A7184;font-size:14px;font-weight:700;cursor:pointer;
+          transition:.2s;font-family:inherit;
+        " onmouseover="this.style.borderColor='#006D77';this.style.color='#006D77'"
+           onmouseout="this.style.borderColor='#E2EBE9';this.style.color='#5A7184'">
+          Stay Here
+        </button>
+        <a href="track.php" style="
+          flex:1;padding:13px;border:none;border-radius:12px;
+          background:linear-gradient(135deg,#006D77,#2E8B57);color:#fff;
+          font-size:14px;font-weight:700;cursor:pointer;text-decoration:none;
+          display:flex;align-items:center;justify-content:center;gap:6px;
+          box-shadow:0 8px 24px rgba(0,109,119,.25);transition:.2s;
+        ">
+          📍 Track Donation
+        </a>
+      </div>
+
+      <!-- Close X -->
+      <button onclick="document.getElementById('donSuccessOverlay').remove()" style="
+        position:absolute;top:16px;right:16px;background:none;border:none;
+        font-size:20px;cursor:pointer;color:#94A3B8;width:32px;height:32px;
+        border-radius:50%;display:flex;align-items:center;justify-content:center;
+        transition:.2s;
+      " onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">✕</button>
+    </div>
+  `;
+
+  // Animations
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes fadeInBg { from{opacity:0} to{opacity:1} }
+    @keyframes popIn { from{opacity:0;transform:translateY(30px) scale(.92)} to{opacity:1;transform:none} }
+    @keyframes bounceIn { 0%{transform:scale(0)} 60%{transform:scale(1.15)} 100%{transform:scale(1)} }
+  `;
+  document.head.appendChild(style);
+
+  document.body.appendChild(overlay);
+
+  // Close on overlay click
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  // Auto-close after 8 seconds
+  setTimeout(() => { if(document.getElementById('donSuccessOverlay')) document.getElementById('donSuccessOverlay').remove(); }, 8000);
+});
 <?php endif; ?>
 /* ── AI Chatbot ── */
 let chatOpen=false;
