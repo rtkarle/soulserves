@@ -5,9 +5,11 @@ require_once __DIR__ . '/../config/upload.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION['admin_id'])) { header("Location: admin_login.php"); exit; }
 
-function table_exists(mysqli $conn, string $table): bool {
-    $res = $conn->query("SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
-    return $res && $res->num_rows > 0;
+if (!function_exists('table_exists')) {
+    function table_exists(mysqli $conn, string $table): bool {
+        $res = $conn->query("SHOW TABLES LIKE '" . mysqli_real_escape_string($conn, $table) . "'");
+        return $res && $res->num_rows > 0;
+    }
 }
 
 $tab    = $_GET['tab']  ?? 'overview';
@@ -96,16 +98,16 @@ if ($cloth_table_exists) {
 foreach ($week_map as $v) { $w_food[] = $v['food']; $w_cloth[] = $v['cloth']; }
 
 // ── Pending donations for task assignment ────────────────────────────────
-$pending_food  = $food_table_exists  ? $conn->query("SELECT id,donor_email,quantity,pickup_address,priority,created_at FROM food_donations WHERE status='accepted' ORDER BY FIELD(priority,'high','medium','low'),created_at ASC LIMIT 20")->fetch_all(MYSQLI_ASSOC) : [];
-$pending_cloth = $cloth_table_exists ? $conn->query("SELECT id,donor_email,quantity,pickup_address,created_at FROM cloth_donations WHERE status='accepted' ORDER BY created_at ASC LIMIT 20")->fetch_all(MYSQLI_ASSOC) : [];
+$pending_food  = $food_table_exists  ? (($pfq = $conn->query("SELECT id,donor_email,quantity,pickup_address,priority,created_at FROM food_donations WHERE status='accepted' ORDER BY FIELD(priority,'high','medium','low'),created_at ASC LIMIT 20")) ? $pfq->fetch_all(MYSQLI_ASSOC) : []) : [];
+$pending_cloth = $cloth_table_exists ? (($pcq = $conn->query("SELECT id,donor_email,quantity,pickup_address,created_at FROM cloth_donations WHERE status='accepted' ORDER BY created_at ASC LIMIT 20")) ? $pcq->fetch_all(MYSQLI_ASSOC) : []) : [];
 
 // Settlements (safe if table doesn't exist yet)
 $settlements_exist = table_exists($conn, 'settlements');
-$settlements = $settlements_exist ? $conn->query("SELECT s.*, ss.store_name FROM settlements s LEFT JOIN seller_stores ss ON ss.seller_email=s.seller_email ORDER BY s.created_at DESC LIMIT 50")->fetch_all(MYSQLI_ASSOC) : [];
+$settlements = $settlements_exist ? (($sq = $conn->query("SELECT s.*, ss.store_name FROM settlements s LEFT JOIN seller_stores ss ON ss.seller_email=s.seller_email ORDER BY s.created_at DESC LIMIT 50")) ? $sq->fetch_all(MYSQLI_ASSOC) : []) : [];
 $pending_payouts = [];
 if ($settlements_exist) {
     $ps = $conn->query("SELECT o.seller_email, ss.store_name, ss.upi_id, ss.bank_account, COUNT(o.id) cnt, SUM(o.total_amount) total FROM orders o JOIN seller_stores ss ON ss.seller_email=o.seller_email WHERE o.order_status='delivered' AND o.payment_status='pending' GROUP BY o.seller_email");
-    $pending_payouts = $ps->fetch_all(MYSQLI_ASSOC);
+    $pending_payouts = $ps ? $ps->fetch_all(MYSQLI_ASSOC) : [];
 }
 
 // ── Paginated queries ─────────────────────────────────────────────────────
@@ -152,15 +154,15 @@ $cloth_pages = (int)ceil($stats['cloth_total']/$per);
 
 // ── Users with search ─────────────────────────────────────────────────────
 $ew = $search ? "AND (name LIKE '%".mysqli_real_escape_string($conn,$search)."%' OR email LIKE '%".mysqli_real_escape_string($conn,$search)."%')" : '';
-$users    = $conn->query("SELECT * FROM register WHERE verified=1 $ew ORDER BY created_at DESC LIMIT 100")->fetch_all(MYSQLI_ASSOC);
-$sellers  = $conn->query("SELECT r.name,r.email,r.mobile,r.created_at,ss.store_name,ss.store_category,ss.is_verified,ss.village,ss.state FROM register r LEFT JOIN seller_stores ss ON ss.seller_email=r.email WHERE r.role='seller' AND r.verified=1 ORDER BY r.created_at DESC")->fetch_all(MYSQLI_ASSOC);
-$products = $conn->query("SELECT p.*,ss.store_name FROM products p LEFT JOIN seller_stores ss ON ss.seller_email=p.seller_email ORDER BY p.created_at DESC LIMIT 50")->fetch_all(MYSQLI_ASSOC);
-$orders   = $conn->query("SELECT o.*,ss.store_name FROM orders o LEFT JOIN seller_stores ss ON ss.seller_email=o.seller_email ORDER BY o.created_at DESC LIMIT 50")->fetch_all(MYSQLI_ASSOC);
-$returns  = table_exists($conn, 'return_requests') ? $conn->query("SELECT rr.*,p.name AS product_name FROM return_requests rr JOIN products p ON p.id=rr.product_id ORDER BY rr.created_at DESC")->fetch_all(MYSQLI_ASSOC) : [];
-$contacts = $conn->query("SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 30")->fetch_all(MYSQLI_ASSOC);
+$users    = ($uq = $conn->query("SELECT * FROM register WHERE verified=1 $ew ORDER BY created_at DESC LIMIT 100")) ? $uq->fetch_all(MYSQLI_ASSOC) : [];
+$sellers  = ($sq = $conn->query("SELECT r.name,r.email,r.mobile,r.created_at,ss.store_name,ss.store_category,ss.is_verified,ss.village,ss.state FROM register r LEFT JOIN seller_stores ss ON ss.seller_email=r.email WHERE r.role='seller' AND r.verified=1 ORDER BY r.created_at DESC")) ? $sq->fetch_all(MYSQLI_ASSOC) : [];
+$products = ($pq = $conn->query("SELECT p.*,ss.store_name FROM products p LEFT JOIN seller_stores ss ON ss.seller_email=p.seller_email ORDER BY p.created_at DESC LIMIT 50")) ? $pq->fetch_all(MYSQLI_ASSOC) : [];
+$orders   = ($oq = $conn->query("SELECT o.*,ss.store_name FROM orders o LEFT JOIN seller_stores ss ON ss.seller_email=o.seller_email ORDER BY o.created_at DESC LIMIT 50")) ? $oq->fetch_all(MYSQLI_ASSOC) : [];
+$returns  = table_exists($conn, 'return_requests') ? (($rq = $conn->query("SELECT rr.*,p.name AS product_name FROM return_requests rr JOIN products p ON p.id=rr.product_id ORDER BY rr.created_at DESC")) ? $rq->fetch_all(MYSQLI_ASSOC) : []) : [];
+$contacts = ($cq = $conn->query("SELECT * FROM contact_messages ORDER BY created_at DESC LIMIT 30")) ? $cq->fetch_all(MYSQLI_ASSOC) : [];
 
 // ── Events & News ─────────────────────────────────────────────────────────
-$events_news = table_exists($conn, 'events_news') ? $conn->query("SELECT * FROM events_news ORDER BY created_at DESC LIMIT 50")->fetch_all(MYSQLI_ASSOC) : [];
+$events_news = table_exists($conn, 'events_news') ? (($eq = $conn->query("SELECT * FROM events_news ORDER BY created_at DESC LIMIT 50")) ? $eq->fetch_all(MYSQLI_ASSOC) : []) : [];
 $events_count = count($events_news);
 $stats['events_news'] = $events_count;
 
@@ -181,7 +183,8 @@ if ($food_table_exists || $cloth_table_exists || $donations_table_exists || tabl
         $queries[] = "SELECT 'order' AS atype, buyer_email AS actor, order_status AS status, created_at, id FROM orders";
     }
     if (!empty($queries)) {
-        $activity = $conn->query(implode(" UNION ALL ", $queries) . " ORDER BY created_at DESC LIMIT 8")->fetch_all(MYSQLI_ASSOC);
+        $act_res = $conn->query(implode(" UNION ALL ", $queries) . " ORDER BY created_at DESC LIMIT 8");
+        $activity = $act_res ? $act_res->fetch_all(MYSQLI_ASSOC) : [];
     }
 }
 
@@ -193,7 +196,8 @@ if ($food_table_exists || $cloth_table_exists || $donations_table_exists) {
     if ($cloth_table_exists) $pieces[] = "SELECT status FROM cloth_donations";
     if ($donations_table_exists) $pieces[] = "SELECT status FROM donations";
     if (!empty($pieces)) {
-        $don_statuses = $conn->query("SELECT status,COUNT(*) c FROM (" . implode(' UNION ALL ', $pieces) . ") x GROUP BY status ORDER BY c DESC")->fetch_all(MYSQLI_ASSOC);
+        $ds_res = $conn->query("SELECT status,COUNT(*) c FROM (" . implode(' UNION ALL ', $pieces) . ") x GROUP BY status ORDER BY c DESC");
+        $don_statuses = $ds_res ? $ds_res->fetch_all(MYSQLI_ASSOC) : [];
     }
 }
 $max_ds = max(1, array_sum(array_column($don_statuses,'c')));

@@ -20,6 +20,7 @@
   --cyan:        #06B6D4;
   --white:       #FFFFFF;
   --bg:          #F4F7F6;
+  --soft-bg:     #F7FAF9;
   --card:        #FFFFFF;
   --border:      #E2EBE9;
   --text:        #102A43;
@@ -2205,3 +2206,320 @@ a,button,.nav-btn,.nav-item,.wb-btn,.vwb-btn,.swb-btn,
 .notif-item-title { font-weight: 700; margin-bottom: 2px; }
 .notif-item-time { font-size: 10px; color: var(--muted); margin-top: 4px; }
 
+
+/* ══════════════════════════════════════════════════════════
+   FIXES v3.6 — CSS gaps identified in audit
+   1. .sw-btn alias for .swb-btn (volunteer FCFS banner)
+   2. quick-cat-grid mobile responsive
+   3. volunteer mobile bottom tab bar
+   4. profile-card styles
+   5. track-search styles
+   6. Various missing responsive rules
+══════════════════════════════════════════════════════════ */
+
+/* ── Fix 1: .sw-btn alias (used in volunteer FCFS banner) ── */
+.sw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  transition: .2s;
+  text-decoration: none;
+}
+.sw-btn.white {
+  background: #fff;
+  color: var(--teal);
+}
+.sw-btn.white:hover {
+  background: #e8fdf5;
+  transform: translateY(-1px);
+}
+.sw-btn.glass {
+  background: rgba(255,255,255,.15);
+  color: #fff;
+  border: 1.5px solid rgba(255,255,255,.3);
+}
+.sw-btn.glass:hover { background: rgba(255,255,255,.25); }
+
+/* ── Fix 2: quick-cat-grid full mobile responsive ── */
+@media(max-width:700px) {
+  .quick-cat-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .quick-cat-tile {
+    padding: 12px 8px;
+  }
+  .quick-cat-tile .qc-icon { font-size: 20px; }
+  .quick-cat-tile .qc-label { font-size: 11px; }
+}
+@media(max-width:480px) {
+  .quick-cat-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+  }
+  .quick-cat-tile {
+    padding: 10px 6px;
+    border-radius: 12px;
+  }
+  .quick-cat-tile .qc-icon { font-size: 18px; }
+  .quick-cat-tile .qc-label { font-size: 10px; }
+  .quick-cat-tile .qc-badge { display: none; }
+}
+@media(max-width:360px) {
+  .quick-cat-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 7px;
+  }
+}
+
+/* ── Fix 3: Volunteer mobile bottom tab bar ── */
+.vol-mobile-tabs {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-top: 1px solid var(--border);
+  z-index: 300;
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(16,42,67,.08);
+}
+.vol-mobile-tabs-inner {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  max-width: 480px;
+  margin: 0 auto;
+}
+.vol-tab-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+  border-radius: 10px;
+  transition: .15s;
+  position: relative;
+  min-width: 52px;
+}
+.vol-tab-btn .tab-icon { font-size: 18px; line-height: 1; }
+.vol-tab-btn.active { color: var(--teal); }
+.vol-tab-btn.active .tab-icon { transform: scale(1.15); }
+.vol-tab-btn .tab-badge {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  padding: 0 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+@media(max-width:700px) {
+  .vol-mobile-tabs { display: block; }
+  .main { padding-bottom: 70px; }
+}
+
+/* ── Fix 4: Profile card (donor + volunteer) ── */
+.profile-card {
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--gradient-teal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 900;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 24px rgba(0,109,119,.25);
+}
+.profile-row {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(16,42,67,.06);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.profile-row:last-of-type { border-bottom: none; }
+.profile-row label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: var(--muted);
+}
+.profile-row p {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+}
+
+/* ── Fix 5: Track search ── */
+.track-search-wrap {
+  position: relative;
+  margin-bottom: 16px;
+}
+.track-search-input {
+  width: 100%;
+  padding: 12px 16px 12px 42px;
+  border: 1.5px solid var(--border);
+  border-radius: 50px;
+  font-size: 13px;
+  background: #fff;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+  font-family: inherit;
+  color: var(--navy);
+}
+.track-search-input:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(0,109,119,.1);
+}
+.track-search-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* ── Fix 6: Don table responsive — hide less critical cols on mobile ── */
+@media(max-width:600px) {
+  .don-table th:nth-child(4),
+  .don-table td:nth-child(4) {
+    display: none; /* hide pickup address on small screens */
+  }
+}
+@media(max-width:480px) {
+  .don-table th:nth-child(5),
+  .don-table td:nth-child(5) {
+    display: none; /* hide date col too — keep ID/type/qty/status/photo */
+  }
+}
+
+/* ── Fix 7: Volunteer nearby banner heading overflow ── */
+@media(max-width:480px) {
+  .nearby-claim-banner h3 {
+    font-size: 14px;
+  }
+  .nearby-claim-banner p {
+    font-size: 12px;
+  }
+}
+
+/* ── Fix 8: Tab panel — ensure hidden by default, no flicker ── */
+.tab-panel {
+  display: none;
+}
+.tab-panel.active {
+  display: block;
+  animation: fadeUp .3s ease;
+}
+
+/* ── Fix 9: Sidebar overlay z-index fix ── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(16,42,67,.45);
+  z-index: 399;
+  backdrop-filter: blur(2px);
+}
+.sidebar-overlay.active,
+.sidebar-overlay.show {
+  display: block;
+}
+
+/* ── Fix 10: Mobile topbar — ensure always visible on small screens ── */
+@media(min-width:701px) {
+  .mobile-topbar { display: none; }
+}
+@media(max-width:700px) {
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 300;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 2px 12px rgba(16,42,67,.06);
+  }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform .35s cubic-bezier(.22,1,.36,1);
+  }
+  .sidebar.open,
+  .sidebar.show {
+    transform: translateX(0);
+    box-shadow: 4px 0 32px rgba(16,42,67,.3);
+  }
+  .main {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+}
+
+/* ── Fix 11: Page bottom padding on mobile (avoid content behind tab bar) ── */
+@media(max-width:700px) {
+  .page {
+    padding-bottom: 80px;
+  }
+}
+
+/* ── Fix 12: Pill class consistency — ensure correct display everywhere ── */
+.pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+  letter-spacing: .3px;
+}
+.pill.pending     { background:#fef3c7; color:#92400e }
+.pill.accepted    { background:#dbeafe; color:#1e40af }
+.pill.scheduled   { background:#ede9fe; color:#5b21b6 }
+.pill.out_for_pickup { background:#fce7f3; color:#9d174d }
+.pill.picked_up,
+.pill.delivered   { background:#d1fae5; color:#065f46 }
+.pill.rejected    { background:#fee2e2; color:#991b1b }
+.pill.placed      { background:#dbeafe; color:#1e40af }
+.pill.confirmed   { background:#fef3c7; color:#92400e }
+.pill.shipped     { background:#ede9fe; color:#5b21b6 }
+.pill.cancelled   { background:#fee2e2; color:#991b1b }
+.pill.return_requested { background:#fce7f3; color:#9d174d }

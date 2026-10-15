@@ -786,7 +786,7 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
   <?php endforeach; ?>
 </div>
 <!-- Map placeholder -->
-<div id="volRouteMap" class="vol-map" style="background:var(--soft-bg);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px">
+<div id="volRouteMap" class="vol-map" style="background:var(--bg);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px">
   <div style="text-align:center"><div style="font-size:32px;margin-bottom:8px">📍</div>Enable location to see live map</div>
 </div>
 <?php endif; ?>
@@ -1117,6 +1117,30 @@ document.addEventListener('click', e => {
   }
 });
 </script>
+<!-- ══ VOLUNTEER MOBILE BOTTOM TAB BAR ══ -->
+<div class="vol-mobile-tabs" id="volMobileTabs">
+  <div class="vol-mobile-tabs-inner">
+    <button class="vol-tab-btn <?=$tab==='overview'?'active':''?>" onclick="openTab('overview')">
+      <span class="tab-icon">🏠</span>Overview
+    </button>
+    <button class="vol-tab-btn <?=$tab==='nearby'?'active':''?>" onclick="openTab('nearby')">
+      <span class="tab-icon">⚡</span>Nearby
+      <?php if(count($nearby_pool)>0):?><span class="tab-badge"><?=count($nearby_pool)?></span><?php endif;?>
+    </button>
+    <button class="vol-tab-btn <?=$tab==='assigned'?'active':''?>" onclick="openTab('assigned')">
+      <span class="tab-icon">📦</span>Pickups
+      <?php if(count($assigned)>0):?><span class="tab-badge"><?=count($assigned)?></span><?php endif;?>
+    </button>
+    <button class="vol-tab-btn <?=$tab==='tasks'?'active':''?>" onclick="openTab('tasks')">
+      <span class="tab-icon">📋</span>Tasks
+      <?php if(count($pending_tasks)>0):?><span class="tab-badge"><?=count($pending_tasks)?></span><?php endif;?>
+    </button>
+    <button class="vol-tab-btn <?=$tab==='completed'?'active':''?>" onclick="openTab('completed')">
+      <span class="tab-icon">✅</span>Done
+    </button>
+  </div>
+</div>
+
 <script src="../js/script.js"></script>
 </body>
 </html>

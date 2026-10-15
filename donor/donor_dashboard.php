@@ -1111,5 +1111,28 @@ document.addEventListener('click', e => {
   }
 });
 </script>
+
+<!-- ══ DONOR MOBILE BOTTOM TAB BAR ══ -->
+<div class="vol-mobile-tabs" id="donorMobileTabs">
+  <div class="vol-mobile-tabs-inner">
+    <a href="donor_dashboard.php" class="vol-tab-btn <?=($_SERVER['REQUEST_URI']??'')=='/donor/donor_dashboard.php'?'active':''?>">
+      <span class="tab-icon">🏠</span>Home
+    </a>
+    <a href="donate.php" class="vol-tab-btn">
+      <span class="tab-icon">🎁</span>Donate
+    </a>
+    <a href="track.php" class="vol-tab-btn">
+      <span class="tab-icon">📍</span>Track
+    </a>
+    <a href="history.php" class="vol-tab-btn">
+      <span class="tab-icon">📋</span>History
+    </a>
+    <a href="../shop/shop.php" class="vol-tab-btn">
+      <span class="tab-icon">🛍️</span>Shop
+      <?php if($cart_count>0):?><span class="tab-badge"><?=$cart_count?></span><?php endif;?>
+    </a>
+  </div>
+</div>
+
 </body>
 </html>
