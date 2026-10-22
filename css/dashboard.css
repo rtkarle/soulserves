@@ -1392,8 +1392,19 @@ td img { width:44px; height:36px; object-fit:cover; border-radius:8px; border:1p
 .sidebar{ contain:layout style; }
 .main{ contain:layout; }
 
-/* Lazy content sections */
-.page > section,.page > div{ content-visibility:auto; contain-intrinsic-size:0 400px; }
+/* Lazy content sections — safely exclude tab panels and interactive widgets */
+.tab-panel, .welcome-band, .vwb, .kpi-row, .vkpi-row, .nearby-claim-banner, .quick-cat-wrap, .track-list, .ai-panel, .ai-vol-panel {
+  content-visibility: visible !important;
+  contain-intrinsic-size: auto !important;
+}
+.tab-panel {
+  display: none;
+  width: 100%;
+}
+.tab-panel.active {
+  display: block;
+  animation: fUp .25s ease;
+}
 
 /* Touch-action on interactive elements */
 .nav-btn,.hamburger,.wb-btn,.pm-card,.track-card,.kpi-card{
@@ -2304,21 +2315,28 @@ a,button,.nav-btn,.nav-item,.wb-btn,.vwb-btn,.swb-btn,
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  padding: 4px 12px;
+  padding: 5px 12px;
   font-size: 10px;
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
   border: none;
   background: none;
+  text-decoration: none;
   font-family: inherit;
   border-radius: 10px;
-  transition: .15s;
+  transition: all .15s ease;
   position: relative;
   min-width: 52px;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.vol-tab-btn:hover, .vol-tab-btn:focus {
+  text-decoration: none;
+  color: var(--teal);
 }
 .vol-tab-btn .tab-icon { font-size: 18px; line-height: 1; }
-.vol-tab-btn.active { color: var(--teal); }
+.vol-tab-btn.active { color: var(--teal); font-weight: 700; }
 .vol-tab-btn.active .tab-icon { transform: scale(1.15); }
 .vol-tab-btn .tab-badge {
   position: absolute;
@@ -2338,7 +2356,16 @@ a,button,.nav-btn,.nav-item,.wb-btn,.vwb-btn,.swb-btn,
 }
 @media(max-width:700px) {
   .vol-mobile-tabs { display: block; }
-  .main { padding-bottom: 70px; }
+  .main, .page { padding-bottom: 85px !important; }
+}
+
+.mobile-topbar .notif-bell-btn {
+  background: rgba(0,109,119,.08) !important;
+  border: 1.5px solid rgba(0,109,119,.18) !important;
+  color: var(--navy) !important;
+}
+.mobile-topbar .notif-bell-btn:hover {
+  background: rgba(0,109,119,.16) !important;
 }
 
 /* ── Fix 4: Profile card (donor + volunteer) ── */

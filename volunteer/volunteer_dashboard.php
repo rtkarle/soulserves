@@ -1,6 +1,6 @@
 <?php
 header('Content-Type: text/html; charset=utf-8');
-session_start();
+if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/upload.php';
 require_once __DIR__ . '/../api/ai_engine.php';
@@ -33,7 +33,7 @@ if ($res->num_rows !== 1) {
 $user = $res->fetch_assoc();
 
 /* ── POST: task accept/reject ── */
-if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['task_action'])){
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['task_action'])) {
     csrf_verify();
     $tid    = (int)$_POST['task_id'];
     $action = in_array($_POST['task_action'],['accepted','rejected']) ? $_POST['task_action'] : 'rejected';
@@ -142,6 +142,15 @@ foreach ($nearby_pool as &$item) {
 }
 unset($item);
 usort($nearby_pool, fn($a, $b) => $b['prox_score'] <=> $a['prox_score']);
+
+/* ── Recent Pickup Notifications from AI matching ── */
+$recent_pickup_notifs = [];
+try {
+    $npq = $conn->prepare("SELECT * FROM notifications WHERE user_email=? AND type='donation_nearby' AND is_read=0 ORDER BY created_at DESC LIMIT 5");
+    $npq->bind_param("s", $email);
+    $npq->execute();
+    $recent_pickup_notifs = $npq->get_result()->fetch_all(MYSQLI_ASSOC);
+} catch (Throwable $e) {}
 
 /* ── Combine cart + order counts ── */
 $shop_counts = $conn->query("SELECT
@@ -449,6 +458,52 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
 
 <!-- MAIN -->
 <main class="main">
+
+<!-- ══ DESKTOP TOPBAR ══ -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div>
+      <h1 class="topbar-title" style="margin:0;font-size:18px;font-weight:800;color:var(--navy)">Volunteer Workspace</h1>
+      <span class="topbar-subtitle"><?=$vol_emoji?> <?=$vol_level?> · Impact Score <strong><?=$impact_score?>/100</strong> · <?=count($assigned)?> Active Pickups</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button type="button" class="vwb-btn glass" onclick="openTab('nearby')" style="background:rgba(0,109,119,.08);color:var(--teal);border:1px solid rgba(0,109,119,.2);padding:7px 14px;font-size:12px;font-weight:700;border-radius:20px;cursor:pointer">
+      ⚡ Nearby (<?=count($nearby_pool)?>)
+    </button>
+    <button type="button" class="vwb-btn glass" onclick="openTab('route')" style="background:rgba(0,109,119,.08);color:var(--teal);border:1px solid rgba(0,109,119,.2);padding:7px 14px;font-size:12px;font-weight:700;border-radius:20px;cursor:pointer">
+      🗺️ AI Route
+    </button>
+    <button type="button" onclick="document.getElementById('sosModal').style.display='flex'" style="background:#fee2e2;color:#dc2626;border:1px solid #fecaca;padding:7px 14px;font-size:12px;font-weight:800;border-radius:20px;cursor:pointer">
+      🆘 SOS
+    </button>
+
+    <!-- Desktop Notification Bell -->
+    <div class="notif-bell-wrap">
+      <button type="button" class="notif-bell-btn desk-notif-btn" onclick="toggleNotifs(event)" aria-label="Notifications" style="background:rgba(0,109,119,.08);border:1.5px solid rgba(0,109,119,.18);color:var(--navy)">
+        🔔<span class="notif-badge" style="display:none">0</span>
+      </button>
+      <div class="notif-dropdown" style="right:0">
+        <div class="notif-hdr">
+          <span>Nearby Pickup Alerts</span>
+          <button type="button" onclick="markAllNotifsRead()" style="background:none;border:none;color:var(--teal);font-size:11px;font-weight:700;cursor:pointer">Mark all read</button>
+        </div>
+        <div class="notif-list">
+          <div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Loading alerts...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Chip -->
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 4px 6px;background:rgba(16,42,67,.04);border-radius:30px;border:1px solid rgba(16,42,67,.06)">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--vgr);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">
+        <?=strtoupper(substr($user['name'],0,1))?>
+      </div>
+      <span style="font-size:12px;font-weight:700;color:var(--navy)"><?=htmlspecialchars($user['name'])?></span>
+    </div>
+  </div>
+</header>
+
 <div class="page">
 
 <!-- ══ TAB: OVERVIEW ══ -->
@@ -497,14 +552,37 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
   </div>
 </div>
 
-<!-- ══ NEARBY AVAILABLE DONATIONS (FCFS POOL) ══ -->
-<div class="nearby-claim-banner">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
-    <div>
-      <h3>⚡ Available Nearby Donations (First-Come, First-Served)</h3>
-      <p>Donations in your area waiting for pickup. The first volunteer to accept is assigned the task!</p>
+<!-- ══ AI REAL-TIME DONATION PICKUP DISPATCH ALERT BANNER ══ -->
+<div class="nearby-claim-banner" style="background:linear-gradient(135deg,#0a2540 0%,#006d77 55%,#2e8b57 100%);border-radius:20px;padding:22px 24px;color:#fff;margin-bottom:20px;box-shadow:0 12px 36px rgba(0,109,119,.25);border:1.5px solid rgba(255,255,255,.18);position:relative;overflow:hidden">
+  <div style="position:absolute;right:-15px;bottom:-20px;font-size:100px;opacity:.07;pointer-events:none">⚡</div>
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+    <div style="display:flex;align-items:flex-start;gap:14px;flex:1;min-width:280px">
+      <div style="width:48px;height:48px;border-radius:14px;background:rgba(255,255,255,.18);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">
+        📢
+      </div>
+      <div>
+        <div style="display:inline-flex;align-items:center;gap:6px;background:#FF8A00;color:#fff;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;margin-bottom:6px;letter-spacing:.4px;text-transform:uppercase">
+          <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#fff;animation:livP 1.4s infinite"></span> AI Volunteer Dispatch Alert
+        </div>
+        <h3 style="font-size:17px;font-weight:800;color:#fff;margin-bottom:4px">
+          <?=!empty($recent_pickup_notifs) ? 'नवीन डोनेशन पिकअपसाठी मेसेज पाठवला आहे! (New Donation Pickup Request Arrived)' : (count($nearby_pool) > 0 ? 'नवीन डोनेशन संकलन उपलब्ध आहे! (New Donation Pickup Alert)' : 'डोनेशन संकलन रडार सक्रिय आहे (Pickup Radar Active)')?>
+        </h3>
+        <p style="font-size:13px;color:rgba(255,255,255,.88);line-height:1.6;margin:0">
+          <?php if(!empty($recent_pickup_notifs)): ?>
+            📩 <strong>नुकताच आलेला अलर्ट:</strong> <?=htmlspecialchars($recent_pickup_notifs[0]['message'])?>
+          <?php elseif(count($nearby_pool) > 0): ?>
+            📍 तुमच्या क्षेत्रातील (<?=htmlspecialchars($vol_city ? ucfirst($vol_city) : ($vol_pin ?: 'Your Area'))?>) दात्याने डोनेशन केले आहे. <strong>First-Come, First-Served (FCFS)</strong> तत्त्वावर आधी क्लेम करणाऱ्या स्वयंसेवकाला टास्क मिळेल!
+          <?php else: ?>
+            📍 तुमच्या परिसरातील (<?=htmlspecialchars($vol_city ? ucfirst($vol_city) : ($vol_pin ?: 'Your Area'))?>) डोनेशन्सचे मॉनिटरिंग सुरू आहे. नवीन डोनेशन नोंद होताच येथे व नोटिफिकेशनमध्ये इन्स्टंट मेसेज येईल.
+          <?php endif; ?>
+        </p>
+      </div>
     </div>
-    <button type="button" class="sw-btn white" onclick="openTab('nearby')" style="background:#fff;color:#006d77;border:none;padding:8px 18px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer">View All (<?=count($nearby_pool)?>) →</button>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button type="button" class="sw-btn white" onclick="openTab('nearby')" style="background:#fff;color:#006d77;border:none;padding:10px 20px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.12);transition:.2s">
+        ⚡ सर्व जवळील टास्क्स पहा (<?=count($nearby_pool)?>) →
+      </button>
+    </div>
   </div>
 </div>
 
@@ -937,7 +1015,16 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
 function openTab(t){
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
-  const p=document.getElementById('tab-'+t);if(p)p.classList.add('active');
+  const p=document.getElementById('tab-'+t);
+  if(p){
+    p.classList.add('active');
+    if(window.innerWidth < 768){
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    }
+  }
+  if(t==='route' && window.initRouteMap){
+    setTimeout(window.initRouteMap, 150);
+  }
   history.replaceState(null,'','?tab='+t);
 }
 function openProofModal(id,table,type){
@@ -1050,11 +1137,18 @@ function claimTask(donationId, table, categoryName, area) {
 
 /* ── In-App Notification Drawer ── */
 let notifsLoaded = false;
-function toggleNotifs() {
-  const dd = document.getElementById('notifDropdown');
-  if (!dd) return;
-  dd.classList.toggle('show');
-  if (dd.classList.contains('show') && !notifsLoaded) {
+function toggleNotifs(e) {
+  if (e) e.stopPropagation();
+  const dropdown = (e && e.currentTarget) ? e.currentTarget.closest('.notif-bell-wrap')?.querySelector('.notif-dropdown') : null;
+  if (dropdown) {
+    const wasOpen = dropdown.classList.contains('show');
+    document.querySelectorAll('.notif-dropdown.show').forEach(dd => dd.classList.remove('show'));
+    if (!wasOpen) dropdown.classList.add('show');
+  } else {
+    document.querySelectorAll('.notif-dropdown').forEach(dd => dd.classList.toggle('show'));
+  }
+  const anyShown = Array.from(document.querySelectorAll('.notif-dropdown')).some(dd => dd.classList.contains('show'));
+  if (anyShown && !notifsLoaded) {
     loadNotifications();
   }
 }
@@ -1063,28 +1157,29 @@ function loadNotifications() {
   fetch('../api/notifications.php')
     .then(r => r.json())
     .then(d => {
-      const badge = document.getElementById('notifBadge');
-      if (badge) {
+      const badges = document.querySelectorAll('.notif-badge');
+      badges.forEach(badge => {
         if (d.unread_count > 0) {
           badge.textContent = d.unread_count > 9 ? '9+' : d.unread_count;
           badge.style.display = 'flex';
         } else {
           badge.style.display = 'none';
         }
-      }
-      const list = document.getElementById('notifList');
-      if (!list) return;
+      });
+      const lists = document.querySelectorAll('.notif-list');
+      if (lists.length === 0) return;
       if (!d.notifications || d.notifications.length === 0) {
-        list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">No notifications</div>';
+        lists.forEach(l => l.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">No notifications</div>');
         return;
       }
-      list.innerHTML = d.notifications.map(n => `
-        <a href="${n.link || '#'}" class="notif-item ${n.is_read == 0 ? 'unread' : ''}" onclick="markNotifRead(${n.id})">
+      const html = d.notifications.map(n => `
+        <a href="${n.link || '#'}" class="notif-item ${n.is_read == 0 ? 'unread' : ''}" onclick="handleNotifClick(event, ${n.id}, '${n.link || ''}')">
           <div class="notif-item-title">${n.title}</div>
           <div>${n.message}</div>
           <div class="notif-item-time">${n.time_ago}</div>
         </a>
       `).join('');
+      lists.forEach(l => l.innerHTML = html);
       notifsLoaded = true;
     }).catch(() => {});
 }
@@ -1097,6 +1192,27 @@ function markNotifRead(id) {
   }).catch(() => {});
 }
 
+function handleNotifClick(e, id, link) {
+  markNotifRead(id);
+  if (link && link.includes('tab=nearby')) {
+    e.preventDefault();
+    document.querySelectorAll('.notif-dropdown.show').forEach(dd => dd.classList.remove('show'));
+    openTab('nearby');
+    const match = link.match(/claim_id=([^&]+)/);
+    if (match && match[1]) {
+      setTimeout(() => {
+        const card = document.querySelector(`[id*="${match[1]}"]`);
+        if (card) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.style.outline = '3px solid #FF8A00';
+          card.style.boxShadow = '0 0 24px rgba(255,138,0,.5)';
+          card.style.borderRadius = '16px';
+        }
+      }, 350);
+    }
+  }
+}
+
 function markAllNotifsRead() {
   fetch('../api/notifications.php', {
     method: 'POST',
@@ -1104,38 +1220,95 @@ function markAllNotifsRead() {
     body: 'action=mark_all'
   }).then(() => {
     document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
-    const badge = document.getElementById('notifBadge');
-    if (badge) badge.style.display = 'none';
+    document.querySelectorAll('.notif-badge').forEach(badge => badge.style.display = 'none');
   }).catch(() => {});
 }
 
-window.addEventListener('DOMContentLoaded', loadNotifications);
+/* ── Leaflet AI Route Map Init ── */
+let routeMapInitialized = false;
+let volMapInstance = null;
+window.initRouteMap = function() {
+  const mapEl = document.getElementById('volRouteMap');
+  if (!mapEl || typeof L === 'undefined') return;
+  if (!routeMapInitialized) {
+    mapEl.innerHTML = '';
+    volMapInstance = L.map('volRouteMap', {
+      zoomControl: true,
+      scrollWheelZoom: false
+    }).setView([18.5204, 73.8567], 12);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 18
+    }).addTo(volMapInstance);
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        volMapInstance.setView([lat, lng], 13);
+        const meIcon = L.divIcon({
+          className: 'vol-map-me-pin',
+          html: '<div style="background:#006D77;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.3);border:2px solid #fff;font-size:16px">🛵</div>',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16]
+        });
+        L.marker([lat, lng], {icon: meIcon}).addTo(volMapInstance)
+          .bindPopup('<strong>Your Location</strong><br>Ready for pickups').openPopup();
+      }, () => {});
+    }
+    routeMapInitialized = true;
+  }
+  setTimeout(() => {
+    if (volMapInstance) volMapInstance.invalidateSize();
+  }, 200);
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadNotifications();
+  if ('<?=$tab?>' === 'route') {
+    setTimeout(window.initRouteMap, 300);
+  }
+  const urlParams = new URLSearchParams(window.location.search);
+  const claimId = urlParams.get('claim_id');
+  if (claimId) {
+    openTab('nearby');
+    setTimeout(() => {
+      const card = document.querySelector(`[id*="${claimId}"]`);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.style.outline = '3px solid #FF8A00';
+        card.style.boxShadow = '0 0 24px rgba(255,138,0,.5)';
+        card.style.borderRadius = '16px';
+      }
+    }, 450);
+  }
+});
 document.addEventListener('click', e => {
-  const wrap = document.getElementById('notifBellWrap');
-  if (wrap && !wrap.contains(e.target)) {
-    document.getElementById('notifDropdown')?.classList.remove('show');
+  if (!e.target.closest('.notif-bell-wrap')) {
+    document.querySelectorAll('.notif-dropdown.show').forEach(dd => dd.classList.remove('show'));
   }
 });
 </script>
 <!-- ══ VOLUNTEER MOBILE BOTTOM TAB BAR ══ -->
 <div class="vol-mobile-tabs" id="volMobileTabs">
   <div class="vol-mobile-tabs-inner">
-    <button class="vol-tab-btn <?=$tab==='overview'?'active':''?>" onclick="openTab('overview')">
+    <button class="vol-tab-btn <?=$tab==='overview'?'active':''?>" data-tab="overview" onclick="openTab('overview')">
       <span class="tab-icon">🏠</span>Overview
     </button>
-    <button class="vol-tab-btn <?=$tab==='nearby'?'active':''?>" onclick="openTab('nearby')">
+    <button class="vol-tab-btn <?=$tab==='nearby'?'active':''?>" data-tab="nearby" onclick="openTab('nearby')">
       <span class="tab-icon">⚡</span>Nearby
       <?php if(count($nearby_pool)>0):?><span class="tab-badge"><?=count($nearby_pool)?></span><?php endif;?>
     </button>
-    <button class="vol-tab-btn <?=$tab==='assigned'?'active':''?>" onclick="openTab('assigned')">
+    <button class="vol-tab-btn <?=$tab==='assigned'?'active':''?>" data-tab="assigned" onclick="openTab('assigned')">
       <span class="tab-icon">📦</span>Pickups
       <?php if(count($assigned)>0):?><span class="tab-badge"><?=count($assigned)?></span><?php endif;?>
     </button>
-    <button class="vol-tab-btn <?=$tab==='tasks'?'active':''?>" onclick="openTab('tasks')">
+    <button class="vol-tab-btn <?=$tab==='tasks'?'active':''?>" data-tab="tasks" onclick="openTab('tasks')">
       <span class="tab-icon">📋</span>Tasks
       <?php if(count($pending_tasks)>0):?><span class="tab-badge"><?=count($pending_tasks)?></span><?php endif;?>
     </button>
-    <button class="vol-tab-btn <?=$tab==='completed'?'active':''?>" onclick="openTab('completed')">
+    <button class="vol-tab-btn <?=$tab==='completed'?'active':''?>" data-tab="completed" onclick="openTab('completed')">
       <span class="tab-icon">✅</span>Done
     </button>
   </div>

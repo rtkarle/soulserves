@@ -1,6 +1,6 @@
 <?php
 header('Content-Type: text/html; charset=utf-8');
-session_start();
+if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/upload.php';
 require_once __DIR__ . '/../api/ai_engine.php';
@@ -436,6 +436,52 @@ $STATUS_ICONS =['📝','✅','📅','🚚','📦','🎉'];
 
 <!-- ══ MAIN ══ -->
 <main class="main">
+
+<!-- ══ DESKTOP TOPBAR ══ -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div>
+      <h1 class="topbar-title" style="margin:0;font-size:18px;font-weight:800;color:var(--navy)">Donor Dashboard</h1>
+      <span class="topbar-subtitle">Welcome back, <?=htmlspecialchars($user['name'])?> · <strong><?=$total?></strong> total donation<?=$total!=1?'s':''?></span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <a href="donate.php" class="wb-btn" style="background:var(--teal);color:#fff;padding:7px 16px;font-size:12px;font-weight:800;border-radius:20px;text-decoration:none;display:inline-flex;align-items:center;gap:6px">
+      🎁 New Donation
+    </a>
+    <a href="track.php" class="wb-btn" style="background:rgba(0,109,119,.08);color:var(--teal);padding:7px 14px;font-size:12px;font-weight:700;border-radius:20px;text-decoration:none">
+      📍 Live Track
+    </a>
+    <a href="../shop/cart.php" style="position:relative;background:rgba(0,109,119,.08);border:1.5px solid rgba(0,109,119,.15);width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:16px" title="Cart">
+      🛒<?php if($cart_count>0):?><span style="position:absolute;top:-2px;right:-2px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;border-radius:10px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 3px"><?=$cart_count?></span><?php endif;?>
+    </a>
+
+    <!-- Desktop Notification Bell -->
+    <div class="notif-bell-wrap">
+      <button type="button" class="notif-bell-btn desk-notif-btn" onclick="toggleNotifs(event)" aria-label="Notifications" style="background:rgba(0,109,119,.08);border:1.5px solid rgba(0,109,119,.18);color:var(--navy)">
+        🔔<span class="notif-badge" style="display:none">0</span>
+      </button>
+      <div class="notif-dropdown" style="right:0">
+        <div class="notif-hdr">
+          <span>Donation Updates</span>
+          <button type="button" onclick="markAllNotifsRead()" style="background:none;border:none;color:var(--teal);font-size:11px;font-weight:700;cursor:pointer">Mark all read</button>
+        </div>
+        <div class="notif-list">
+          <div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">Loading updates...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Chip -->
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 4px 6px;background:rgba(16,42,67,.04);border-radius:30px;border:1px solid rgba(16,42,67,.06)">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--gradient-teal);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">
+        <?=strtoupper(substr($user['name'],0,1))?>
+      </div>
+      <span style="font-size:12px;font-weight:700;color:var(--navy)"><?=htmlspecialchars($user['name'])?></span>
+    </div>
+  </div>
+</header>
+
 <div class="page">
 
 <?php /* ── Success notice ── */ 
@@ -1048,43 +1094,53 @@ document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='
 <script src="../js/soulserve-ui.js"></script>
 <script>
 let notifsLoaded = false;
-function toggleNotifs() {
-  const dd = document.getElementById('notifDropdown');
-  if (!dd) return;
-  dd.classList.toggle('show');
-  if (dd.classList.contains('show') && !notifsLoaded) {
+function toggleNotifs(e) {
+  if (e) e.stopPropagation();
+  const dropdown = (e && e.currentTarget) ? e.currentTarget.closest('.notif-bell-wrap')?.querySelector('.notif-dropdown') : null;
+  if (dropdown) {
+    const wasOpen = dropdown.classList.contains('show');
+    document.querySelectorAll('.notif-dropdown.show').forEach(dd => dd.classList.remove('show'));
+    if (!wasOpen) dropdown.classList.add('show');
+  } else {
+    document.querySelectorAll('.notif-dropdown').forEach(dd => dd.classList.toggle('show'));
+  }
+  const anyShown = Array.from(document.querySelectorAll('.notif-dropdown')).some(dd => dd.classList.contains('show'));
+  if (anyShown && !notifsLoaded) {
     loadNotifications();
   }
 }
+
 function loadNotifications() {
   fetch('../api/notifications.php')
     .then(r => r.json())
     .then(d => {
-      const badge = document.getElementById('notifBadge');
-      if (badge) {
+      const badges = document.querySelectorAll('.notif-badge');
+      badges.forEach(badge => {
         if (d.unread_count > 0) {
           badge.textContent = d.unread_count > 9 ? '9+' : d.unread_count;
           badge.style.display = 'flex';
         } else {
           badge.style.display = 'none';
         }
-      }
-      const list = document.getElementById('notifList');
-      if (!list) return;
+      });
+      const lists = document.querySelectorAll('.notif-list');
+      if (lists.length === 0) return;
       if (!d.notifications || d.notifications.length === 0) {
-        list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">No updates yet</div>';
+        lists.forEach(l => l.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px">No updates yet</div>');
         return;
       }
-      list.innerHTML = d.notifications.map(n => `
+      const html = d.notifications.map(n => `
         <a href="${n.link || '#'}" class="notif-item ${n.is_read == 0 ? 'unread' : ''}" onclick="markNotifRead(${n.id})">
           <div class="notif-item-title">${n.title}</div>
           <div>${n.message}</div>
           <div class="notif-item-time">${n.time_ago}</div>
         </a>
       `).join('');
+      lists.forEach(l => l.innerHTML = html);
       notifsLoaded = true;
     }).catch(() => {});
 }
+
 function markNotifRead(id) {
   fetch('../api/notifications.php', {
     method: 'POST',
@@ -1092,6 +1148,7 @@ function markNotifRead(id) {
     body: 'action=mark_read&id=' + id
   }).catch(() => {});
 }
+
 function markAllNotifsRead() {
   fetch('../api/notifications.php', {
     method: 'POST',
@@ -1099,15 +1156,14 @@ function markAllNotifsRead() {
     body: 'action=mark_all'
   }).then(() => {
     document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
-    const badge = document.getElementById('notifBadge');
-    if (badge) badge.style.display = 'none';
+    document.querySelectorAll('.notif-badge').forEach(badge => badge.style.display = 'none');
   }).catch(() => {});
 }
+
 window.addEventListener('DOMContentLoaded', loadNotifications);
 document.addEventListener('click', e => {
-  const wrap = document.getElementById('notifBellWrap');
-  if (wrap && !wrap.contains(e.target)) {
-    document.getElementById('notifDropdown')?.classList.remove('show');
+  if (!e.target.closest('.notif-bell-wrap')) {
+    document.querySelectorAll('.notif-dropdown.show').forEach(dd => dd.classList.remove('show'));
   }
 });
 </script>
@@ -1115,7 +1171,7 @@ document.addEventListener('click', e => {
 <!-- ══ DONOR MOBILE BOTTOM TAB BAR ══ -->
 <div class="vol-mobile-tabs" id="donorMobileTabs">
   <div class="vol-mobile-tabs-inner">
-    <a href="donor_dashboard.php" class="vol-tab-btn <?=($_SERVER['REQUEST_URI']??'')=='/donor/donor_dashboard.php'?'active':''?>">
+    <a href="donor_dashboard.php" class="vol-tab-btn <?=(strpos($_SERVER['REQUEST_URI']??'','donor_dashboard.php')!==false || substr($_SERVER['REQUEST_URI']??'', -7) === '/donor/')?'active':''?>">
       <span class="tab-icon">🏠</span>Home
     </a>
     <a href="donate.php" class="vol-tab-btn">
