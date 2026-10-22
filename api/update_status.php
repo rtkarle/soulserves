@@ -49,8 +49,27 @@ $proof_image_url = null;  // absolute URL for email embedding
 // ── Handle each status ────────────────────────────────────────
 if ($status === 'scheduled') {
     $pickup_date = trim($_POST['pickup_date']     ?? '');
-    $pickup_time = trim($_POST['pickup_time']     ?? '');
+    $pickup_time_raw = trim($_POST['pickup_time'] ?? '');
     $vol_email   = trim($_POST['volunteer_email'] ?? '');
+
+    /* ── Convert pickup_time to MySQL TIME format (HH:MM:SS) ── */
+    /* Accepts: "10 AM", "10:30 AM", "14:30", "2 PM", "10 AM – 12 PM", "10:00-12:00" etc. */
+    $pickup_time = null;
+    if ($pickup_time_raw !== '') {
+        // If range given (e.g. "10 AM – 12 PM"), take the first part
+        $time_part = preg_split('/[\–\-–—–to]/u', $pickup_time_raw)[0];
+        $time_part = trim($time_part);
+
+        // Try direct strtotime parse (handles "4 PM", "10:30 AM", "14:30", "10:00 AM" etc.)
+        $ts = strtotime($time_part);
+        if ($ts !== false) {
+            $pickup_time = date('H:i:s', $ts);
+        } else {
+            // Fallback: store as NULL — never crash on invalid time
+            $pickup_time = null;
+            error_log("[update_status] Could not parse pickup_time: '$pickup_time_raw'");
+        }
+    }
 
     // Ensure columns exist on target table
     try {
@@ -71,7 +90,7 @@ if ($status === 'scheduled') {
 
     $details = [
         'pickup_date'     => $pickup_date,
-        'pickup_time'     => $pickup_time,
+        'pickup_time'     => $pickup_time_raw ?: ($pickup_time ?? ''),  // human-readable for email
         'volunteer_email' => $vol_email,
     ];
 

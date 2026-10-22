@@ -430,103 +430,170 @@ class AdhaarAI {
     }
 
     /* ── 8. PRODUCT RECOMMENDATIONS ────────────────────────
-     * Returns personalised product recommendations for a user
-     * based on: search history, view history, purchase history, and category preference.
-     * Returns array of product rows scored and ranked.
+     * Returns personalised product recommendations for a user.
+     * STRICT REQUIREMENT: Only products viewed multiple times (view_count >= 2)
+     * OR products matching user's search queries/categories are recommended.
+     * If no interaction history exists, strictly returns empty array [] (NOT all products).
+     * Returns array of product rows with _rec_badge and _rec_reason.
      */
     public function getProductRecommendations(string $user_email, int $current_product_id = 0, int $limit = 6): array {
         $me = mysqli_real_escape_string($this->conn, $user_email);
 
-        // ── Collect signals ──────────────────────────────────
-        // 1. Categories from search history (last 30 days)
-        $search_cats = [];
-        $sh_exist = $this->conn->query("SHOW TABLES LIKE 'product_search_history'")->num_rows > 0;
-        if ($sh_exist) {
-            $sq = $this->conn->query(
-                "SELECT category, COUNT(*) w FROM product_search_history
-                 WHERE user_email='$me' AND searched_at > NOW() - INTERVAL 30 DAY
-                 AND category IS NOT NULL GROUP BY category ORDER BY w DESC LIMIT 5"
-            );
-            while ($r = $sq->fetch_assoc()) $search_cats[$r['category']] = (int)$r['w'];
-        }
-
-        // 2. Products viewed (last 30 days)
-        $viewed_ids = [];
-        $vh_exist = $this->conn->query("SHOW TABLES LIKE 'product_view_history'")->num_rows > 0;
-        if ($vh_exist) {
+        // ── 1. Products viewed multiple times (view_count >= 2) ───────────────────
+        $multi_viewed = []; // product_id => view_count
+        
+        // From database (if user logged in)
+        if (!empty($user_email) && $this->conn->query("SHOW TABLES LIKE 'product_view_history'")->num_rows > 0) {
             $vq = $this->conn->query(
                 "SELECT product_id, view_count FROM product_view_history
-                 WHERE user_email='$me' AND last_viewed > NOW() - INTERVAL 30 DAY
-                 ORDER BY view_count DESC, last_viewed DESC LIMIT 20"
+                 WHERE user_email='$me' AND view_count >= 2 AND last_viewed > NOW() - INTERVAL 30 DAY
+                 ORDER BY view_count DESC, last_viewed DESC LIMIT 30"
             );
-            while ($r = $vq->fetch_assoc()) $viewed_ids[$r['product_id']] = (int)$r['view_count'];
-        }
-
-        // 3. Categories from purchase history
-        $bought_cats = [];
-        $bq = $this->conn->query(
-            "SELECT p.category, COUNT(*) w FROM order_items oi
-             JOIN orders o ON o.id=oi.order_id
-             JOIN products p ON p.id=oi.product_id
-             WHERE o.buyer_email='$me'
-             GROUP BY p.category ORDER BY w DESC LIMIT 5"
-        );
-        while ($r = $bq->fetch_assoc()) $bought_cats[$r['category']] = (int)$r['w'];
-
-        // ── Build category preference score ──────────────────
-        $cat_scores = [];
-        foreach ($search_cats as $cat => $w) $cat_scores[$cat] = ($cat_scores[$cat] ?? 0) + $w * 3; // search = 3x weight
-        foreach ($bought_cats as $cat => $w) $cat_scores[$cat] = ($cat_scores[$cat] ?? 0) + $w * 5; // purchase = 5x weight
-        // Viewed products also boost their category
-        if (!empty($viewed_ids)) {
-            $id_list = implode(',', array_map('intval', array_keys($viewed_ids)));
-            $vcq = $this->conn->query("SELECT category FROM products WHERE id IN ($id_list)");
-            while ($r = $vcq->fetch_assoc()) {
-                $cat_scores[$r['category']] = ($cat_scores[$r['category']] ?? 0) + 2;
+            if ($vq) {
+                while ($r = $vq->fetch_assoc()) {
+                    $multi_viewed[(int)$r['product_id']] = (int)$r['view_count'];
+                }
             }
         }
-        arsort($cat_scores);
-        $top_cats = array_keys(array_slice($cat_scores, 0, 3, true));
+        
+        // From active session
+        if (session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['product_views']) && is_array($_SESSION['product_views'])) {
+            foreach ($_SESSION['product_views'] as $pid => $vc) {
+                if ($vc >= 2) {
+                    $pid = (int)$pid;
+                    $multi_viewed[$pid] = max($multi_viewed[$pid] ?? 0, (int)$vc);
+                }
+            }
+        }
 
-        // ── Fetch candidate products ──────────────────────────
+        // ── 2. Search queries and searched categories ─────────────────────────────
+        $search_queries = [];
+        $search_cats = [];
+        
+        // From database (if user logged in)
+        if (!empty($user_email) && $this->conn->query("SHOW TABLES LIKE 'product_search_history'")->num_rows > 0) {
+            $sq = $this->conn->query(
+                "SELECT query, category FROM product_search_history
+                 WHERE user_email='$me' AND searched_at > NOW() - INTERVAL 30 DAY
+                 ORDER BY searched_at DESC LIMIT 15"
+            );
+            if ($sq) {
+                while ($r = $sq->fetch_assoc()) {
+                    $qstr = trim($r['query'] ?? '');
+                    if ($qstr !== '' && !in_array($qstr, $search_queries, true)) {
+                        $search_queries[] = $qstr;
+                    }
+                    if (!empty($r['category']) && !in_array($r['category'], $search_cats, true)) {
+                        $search_cats[] = $r['category'];
+                    }
+                }
+            }
+        }
+        
+        // From active session
+        if (session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['search_history']) && is_array($_SESSION['search_history'])) {
+            foreach ($_SESSION['search_history'] as $sh) {
+                if (!empty($sh['query'])) {
+                    $qstr = trim($sh['query']);
+                    if ($qstr !== '' && !in_array($qstr, $search_queries, true)) {
+                        $search_queries[] = $qstr;
+                    }
+                }
+                if (!empty($sh['category']) && !in_array($sh['category'], $search_cats, true)) {
+                    $search_cats[] = $sh['category'];
+                }
+            }
+        }
+
+        // ── STRICT FILTER: Only recommend products that were seen multiple times OR searched for ──
+        // If the user has NO multiple views AND NO search queries, DO NOT return arbitrary products!
+        if (empty($multi_viewed) && empty($search_queries) && empty($search_cats)) {
+            return [];
+        }
+
+        // Build targeted WHERE clauses for candidates matching user's specific interactions
+        $conds = [];
+        if (!empty($multi_viewed)) {
+            $id_list = implode(',', array_map('intval', array_keys($multi_viewed)));
+            $conds[] = "p.id IN ($id_list)";
+        }
+        foreach (array_slice($search_queries, 0, 5) as $sq) {
+            $esq = mysqli_real_escape_string($this->conn, $sq);
+            $conds[] = "(p.name LIKE '%$esq%' OR p.description LIKE '%$esq%')";
+        }
+        if (!empty($search_cats)) {
+            $cat_list = "'" . implode("','", array_map(fn($c) => mysqli_real_escape_string($this->conn, $c), $search_cats)) . "'";
+            $conds[] = "p.category IN ($cat_list)";
+        }
+
+        if (empty($conds)) {
+            return [];
+        }
+
+        $where_interaction = "(" . implode(" OR ", $conds) . ")";
         $exclude = $current_product_id > 0 ? "AND p.id != $current_product_id" : '';
-        $all_q = $this->conn->query(
+
+        $cand_q = $this->conn->query(
             "SELECT p.*, s.store_name, s.village, s.state
              FROM products p JOIN seller_stores s ON s.seller_email=p.seller_email
-             WHERE p.is_active=1 AND s.is_active=1 $exclude
-             ORDER BY p.total_sold DESC, p.avg_rating DESC LIMIT 100"
+             WHERE p.is_active=1 AND s.is_active=1 $exclude AND $where_interaction
+             ORDER BY p.total_sold DESC, p.avg_rating DESC LIMIT 50"
         );
-        $candidates = $all_q->fetch_all(MYSQLI_ASSOC);
+        if (!$cand_q) return [];
+        $candidates = $cand_q->fetch_all(MYSQLI_ASSOC);
 
-        // ── Score each candidate ──────────────────────────────
+        // Score each candidate strictly based on multi-view frequency and search matching
         foreach ($candidates as &$prod) {
-            $s = 0;
-            $cat = $prod['category'];
+            $score = 0;
+            $pid = (int)$prod['id'];
+            $badge = '';
+            $reason = '';
 
-            // Category preference
-            $s += ($cat_scores[$cat] ?? 0) * 8;
+            // Multi-view signal (highest priority: user explicitly looked at this 2+ times)
+            if (isset($multi_viewed[$pid])) {
+                $vcount = $multi_viewed[$pid];
+                $score += min(70, 30 + ($vcount * 10));
+                $badge = "वारंवार पाहिलेले ({$vcount}x Views)";
+                $reason = "You viewed this product {$vcount} times";
+            }
 
-            // Popularity (sold count)
-            $s += min(30, (int)log(max(1, $prod['total_sold']) + 1, 2) * 6);
+            // Search query text match
+            $matched_search = null;
+            foreach ($search_queries as $sq) {
+                if (stripos($prod['name'], $sq) !== false || stripos($prod['description'], $sq) !== false) {
+                    $matched_search = $sq;
+                    break;
+                }
+            }
+            if ($matched_search !== null) {
+                $score += 45;
+                if (!$badge) {
+                    $badge = "शोध आधारित (" . htmlspecialchars($matched_search) . ")";
+                    $reason = "Matches your search for '" . htmlspecialchars($matched_search) . "'";
+                }
+            }
 
-            // Rating boost
-            $s += (float)$prod['avg_rating'] * 8;
+            // Search category match
+            if (in_array($prod['category'], $search_cats, true)) {
+                $score += 25;
+                if (!$badge) {
+                    $cat_name = ucfirst(str_replace('_', ' ', $prod['category']));
+                    $badge = "तुमच्या पसंतीनुसार ({$cat_name})";
+                    $reason = "Based on your search in {$cat_name}";
+                }
+            }
 
-            // Already viewed → slight boost (familiarity effect)
-            if (isset($viewed_ids[$prod['id']])) $s += 5;
+            // Quality & value adjustments
+            $score += (float)$prod['avg_rating'] * 6;
+            if ($prod['mrp'] > 0 && $prod['price'] < $prod['mrp']) $score += 8;
 
-            // Discount available → boost
-            if ($prod['mrp'] > 0 && $prod['price'] < $prod['mrp']) $s += 10;
-
-            // Freshness (listed in last 30 days)
-            if (strtotime($prod['created_at']) > strtotime('-30 days')) $s += 8;
-
-            $prod['_rec_score'] = round($s, 2);
+            $prod['_rec_score']  = round($score, 2);
+            $prod['_rec_badge']  = $badge ?: 'AI शिफारस (Recommended)';
+            $prod['_rec_reason'] = $reason ?: 'Personalized recommendation';
         }
         unset($prod);
 
-        // ── Sort by score, return top N ───────────────────────
-        usort($candidates, fn($a,$b) => $b['_rec_score'] <=> $a['_rec_score']);
+        usort($candidates, fn($a, $b) => $b['_rec_score'] <=> $a['_rec_score']);
         return array_slice($candidates, 0, $limit);
     }
 
@@ -797,6 +864,21 @@ class AdhaarAI {
      * Tracks search queries and product views for recommendations.
      */
     public function logSearch(string $user_email, string $query, ?string $category, int $result_count): void {
+        $query = trim($query);
+        if ($query !== '' && session_status() === PHP_SESSION_ACTIVE) {
+            if (!isset($_SESSION['search_history']) || !is_array($_SESSION['search_history'])) {
+                $_SESSION['search_history'] = [];
+            }
+            $_SESSION['search_history'][] = [
+                'query' => $query,
+                'category' => $category,
+                'result_count' => $result_count,
+                'searched_at' => time()
+            ];
+            if (count($_SESSION['search_history']) > 20) {
+                array_shift($_SESSION['search_history']);
+            }
+        }
         if (!$this->conn->query("SHOW TABLES LIKE 'product_search_history'")->num_rows) return;
         try {
             $s = $this->conn->prepare(
@@ -808,6 +890,12 @@ class AdhaarAI {
     }
 
     public function logView(string $user_email, int $product_id): void {
+        if ($product_id > 0 && session_status() === PHP_SESSION_ACTIVE) {
+            if (!isset($_SESSION['product_views']) || !is_array($_SESSION['product_views'])) {
+                $_SESSION['product_views'] = [];
+            }
+            $_SESSION['product_views'][$product_id] = ($_SESSION['product_views'][$product_id] ?? 0) + 1;
+        }
         if (!$this->conn->query("SHOW TABLES LIKE 'product_view_history'")->num_rows) return;
         try {
             $s = $this->conn->prepare(
@@ -1500,6 +1588,229 @@ class AdhaarAI {
             $alerts[] = ['level'=>'warn','icon'=>'❌','msg'=>"$rej donation(s) were rejected. Please ensure photos are clear and items meet quality guidelines."];
         }
         return $alerts;
+    }
+
+    /* ── O. COMPREHENSIVE AI ANALYTICS & INSIGHTS ──────────────────
+     * Multi-dimensional operational and predictive analytics:
+     * 1. High-Demand Pincode / Zone Coverage Intelligence
+     * 2. Food Freshness & Spoilage Urgency Risk Analysis
+     * 3. Volunteer Response Velocity & Performance Matrix
+     * 4. Environmental & Social Impact Aggregates
+     */
+    public function getComprehensiveAIAnalytics(): array {
+        // ── 1. Zone & Pincode Coverage Intelligence ──
+        $zones = [];
+        $pincode_don_counts = [];
+        $pincode_pending = [];
+        $pincode_volunteers = [];
+
+        // Aggregate donations by pincode
+        $don_sources = [
+            "SELECT pickup_address, status, volunteer_email FROM food_donations WHERE pickup_address IS NOT NULL",
+            "SELECT pickup_address, status, volunteer_email FROM cloth_donations WHERE pickup_address IS NOT NULL",
+            "SELECT pickup_address, status, volunteer_email FROM donations WHERE pickup_address IS NOT NULL"
+        ];
+        foreach ($don_sources as $sql) {
+            try {
+                $q = $this->conn->query($sql);
+                if ($q) {
+                    while ($row = $q->fetch_assoc()) {
+                        $addr = $row['pickup_address'] ?? '';
+                        $pin = '';
+                        if (preg_match('/\b(\d{6})\b/', $addr, $m)) {
+                            $pin = $m[1];
+                        } else {
+                            // Extract last word / city name fallback
+                            $words = preg_split('/[\s,]+/', trim($addr));
+                            $pin = count($words) > 0 ? ucfirst(strtolower(end($words))) : 'General Area';
+                        }
+                        if ($pin) {
+                            $pincode_don_counts[$pin] = ($pincode_don_counts[$pin] ?? 0) + 1;
+                            $is_pending = in_array($row['status'], ['pending', 'accepted']) && empty($row['volunteer_email']);
+                            if ($is_pending) {
+                                $pincode_pending[$pin] = ($pincode_pending[$pin] ?? 0) + 1;
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable $e) {}
+        }
+
+        // Aggregate volunteers by pincode / city
+        try {
+            $vq = $this->conn->query("SELECT address, pincode FROM register WHERE role='volunteer' AND verified=1");
+            if ($vq) {
+                while ($v = $vq->fetch_assoc()) {
+                    $pin = trim($v['pincode'] ?? '');
+                    if (!$pin && preg_match('/\b(\d{6})\b/', $v['address'] ?? '', $m)) {
+                        $pin = $m[1];
+                    }
+                    if (!$pin && !empty($v['address'])) {
+                        $words = preg_split('/[\s,]+/', trim($v['address']));
+                        $pin = count($words) > 0 ? ucfirst(strtolower(end($words))) : '';
+                    }
+                    if ($pin) {
+                        $pincode_volunteers[$pin] = ($pincode_volunteers[$pin] ?? 0) + 1;
+                    }
+                }
+            }
+        } catch (Throwable $e) {}
+
+        // Combine into zone intelligence records
+        $all_pins = array_unique(array_merge(array_keys($pincode_don_counts), array_keys($pincode_volunteers)));
+        foreach ($all_pins as $pin) {
+            $dons = $pincode_don_counts[$pin] ?? 0;
+            $pend = $pincode_pending[$pin] ?? 0;
+            $vols = $pincode_volunteers[$pin] ?? 0;
+            
+            if ($dons === 0 && $vols === 0) continue;
+
+            if ($pend > 0 && $vols === 0) {
+                $status = 'deficit';
+                $status_label = '🔴 Severe Deficit (No Local Volunteers)';
+                $recommendation = 'Recruit or re-route volunteers to this zone immediately.';
+            } elseif ($pend > $vols) {
+                $status = 'moderate';
+                $status_label = '🟡 High Demand (More Volunteers Needed)';
+                $recommendation = 'Dispatch cross-zone volunteer alerts.';
+            } else {
+                $status = 'optimal';
+                $status_label = '🟢 Well Covered';
+                $recommendation = 'Coverage healthy. Ready for incoming donations.';
+            }
+
+            $zones[] = [
+                'zone'            => $pin,
+                'total_donations' => $dons,
+                'pending_pickups' => $pend,
+                'volunteers'      => $vols,
+                'status'          => $status,
+                'status_label'    => $status_label,
+                'recommendation'  => $recommendation
+            ];
+        }
+
+        // Sort zones by pending pickups descending
+        usort($zones, fn($a, $b) => $b['pending_pickups'] <=> $a['pending_pickups'] ?: $b['total_donations'] <=> $a['total_donations']);
+        $top_zones = array_slice($zones, 0, 10);
+
+        // ── 2. Food Freshness & Spoilage Urgency Risk Analysis ──
+        $fresh_count = 0;
+        $urgent_count = 0;
+        $critical_count = 0;
+        $meals_at_risk = 0;
+        $spoilage_items = [];
+
+        try {
+            $fq = $this->conn->query(
+                "SELECT id, donor_email, quantity, pickup_address, created_at, status, volunteer_email,
+                        TIMESTAMPDIFF(HOUR, created_at, NOW()) AS age_hours
+                 FROM food_donations
+                 WHERE status IN ('pending', 'accepted') AND (volunteer_email IS NULL OR volunteer_email = '')
+                 ORDER BY created_at ASC LIMIT 25"
+            );
+            if ($fq) {
+                while ($r = $fq->fetch_assoc()) {
+                    $age = (int)$r['age_hours'];
+                    $qty = (int)$r['quantity'];
+                    $meals_at_risk += max(1, $qty);
+
+                    if ($age >= 12) {
+                        $critical_count++;
+                        $urgency = 'critical';
+                        $urgency_label = '🔴 Critical (< 6 hrs remaining)';
+                    } elseif ($age >= 4) {
+                        $urgent_count++;
+                        $urgency = 'urgent';
+                        $urgency_label = '🟡 Urgent (Consume today)';
+                    } else {
+                        $fresh_count++;
+                        $urgency = 'fresh';
+                        $urgency_label = '🟢 Freshly Prepared';
+                    }
+
+                    $spoilage_items[] = [
+                        'id'             => (int)$r['id'],
+                        'quantity'       => $qty,
+                        'donor_email'    => $r['donor_email'],
+                        'pickup_address' => $r['pickup_address'],
+                        'age_hours'      => $age,
+                        'urgency'        => $urgency,
+                        'urgency_label'  => $urgency_label
+                    ];
+                }
+            }
+        } catch (Throwable $e) {}
+
+        // ── 3. Volunteer Response Velocity & Performance Matrix ──
+        $tot_volunteers = 0;
+        $active_vols = 0;
+        $completed_30d = 0;
+        try {
+            $tot_volunteers = (int)($this->conn->query("SELECT COUNT(*) c FROM register WHERE role='volunteer' AND verified=1")->fetch_assoc()['c'] ?? 0);
+            
+            $act_q = $this->conn->query("SELECT COUNT(DISTINCT volunteer_email) c FROM (
+                SELECT volunteer_email FROM food_donations WHERE volunteer_email IS NOT NULL AND created_at > NOW() - INTERVAL 30 DAY
+                UNION ALL
+                SELECT volunteer_email FROM cloth_donations WHERE volunteer_email IS NOT NULL AND created_at > NOW() - INTERVAL 30 DAY
+                UNION ALL
+                SELECT volunteer_email FROM donations WHERE volunteer_email IS NOT NULL AND created_at > NOW() - INTERVAL 30 DAY
+            ) a");
+            $active_vols = (int)($act_q ? $act_q->fetch_assoc()['c'] : 0);
+
+            $done_q = $this->conn->query("SELECT COUNT(*) c FROM (
+                SELECT id FROM food_donations WHERE status='delivered' AND created_at > NOW() - INTERVAL 30 DAY
+                UNION ALL
+                SELECT id FROM cloth_donations WHERE status='delivered' AND created_at > NOW() - INTERVAL 30 DAY
+                UNION ALL
+                SELECT id FROM donations WHERE status='delivered' AND created_at > NOW() - INTERVAL 30 DAY
+            ) d");
+            $completed_30d = (int)($done_q ? $done_q->fetch_assoc()['c'] : 0);
+        } catch (Throwable $e) {}
+
+        $readiness_score = $tot_volunteers > 0 ? min(100, round(($active_vols / $tot_volunteers) * 100)) : 0;
+
+        // ── 4. Impact Metrics ──
+        $food_delivered_meals = 0;
+        $cloth_delivered_items = 0;
+        try {
+            $fd = $this->conn->query("SELECT SUM(quantity) q FROM food_donations WHERE status='delivered'")->fetch_assoc();
+            $food_delivered_meals = (int)($fd['q'] ?? 0);
+            $cd = $this->conn->query("SELECT SUM(quantity) q FROM cloth_donations WHERE status='delivered'")->fetch_assoc();
+            $cloth_delivered_items = (int)($cd['q'] ?? 0);
+        } catch (Throwable $e) {}
+
+        $co2_saved_kg = round(($food_delivered_meals * 1.8) + ($cloth_delivered_items * 3.6), 1);
+        $water_saved_liters = round($cloth_delivered_items * 2700);
+
+        return [
+            'zone_coverage' => [
+                'top_zones'        => $top_zones,
+                'total_zones'      => count($zones),
+                'deficit_zones'    => count(array_filter($zones, fn($z) => $z['status'] === 'deficit')),
+                'moderate_zones'   => count(array_filter($zones, fn($z) => $z['status'] === 'moderate')),
+                'healthy_zones'    => count(array_filter($zones, fn($z) => $z['status'] === 'optimal')),
+            ],
+            'spoilage_risk' => [
+                'meals_at_risk'   => $meals_at_risk,
+                'critical_count'  => $critical_count,
+                'urgent_count'    => $urgent_count,
+                'fresh_count'     => $fresh_count,
+                'items'           => array_slice($spoilage_items, 0, 8),
+            ],
+            'volunteer_velocity' => [
+                'total_volunteers' => $tot_volunteers,
+                'active_30d'       => $active_vols,
+                'completed_30d'    => $completed_30d,
+                'readiness_score'  => $readiness_score,
+            ],
+            'impact_metrics' => [
+                'food_meals'         => $food_delivered_meals,
+                'cloth_items'        => $cloth_delivered_items,
+                'co2_saved_kg'       => $co2_saved_kg,
+                'water_saved_liters' => $water_saved_liters,
+            ]
+        ];
     }
 
     /* ── LOG AI DECISION ─────────────────────────────────

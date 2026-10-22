@@ -9,12 +9,9 @@ $is_logged_in = isset($_SESSION['user_email']);
 $me   = $is_logged_in ? $_SESSION['user_email'] : '';
 $role = $_SESSION['role'] ?? 'donor';
 
-/* AI only for logged-in users */
-$ai = null;
-if ($is_logged_in) {
-    require_once __DIR__ . '/../api/ai_engine.php';
-    $ai = adhaar_ai();
-}
+/* AI Engine */
+require_once __DIR__ . '/../api/ai_engine.php';
+$ai = adhaar_ai();
 
 $cat        = $_GET['cat']    ?? 'all';
 $search     = trim($_GET['q'] ?? '');
@@ -437,8 +434,8 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
 <div style="max-width:1200px;margin:32px auto 0;padding:0 20px 40px">
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">
     <div>
-      <h2 style="font-size:17px;font-weight:800;color:var(--navy);margin-bottom:3px">🤖 Recommended For You</h2>
-      <p style="font-size:12px;color:var(--muted)">AI-personalised based on your browsing history</p>
+      <h2 style="font-size:18px;font-weight:800;color:var(--navy);margin-bottom:3px">🤖 Recommended For You</h2>
+      <p style="font-size:12px;color:var(--muted)">AI-personalised strictly based on your viewed items &amp; searches</p>
     </div>
   </div>
   <div class="products-grid">
@@ -449,11 +446,12 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
       <a href="product.php?id=<?=(int)$p['id']?>" style="display:block;text-decoration:none;color:inherit">
         <?php if($img): ?><img src="<?=htmlspecialchars($img)?>" class="prod-img" alt="" loading="lazy">
         <?php else: ?><div class="prod-img-ph">🛍️</div><?php endif; ?>
-        <div style="position:absolute;top:10px;left:10px;background:rgba(0,109,119,.9);color:#fff;font-size:9px;font-weight:800;padding:3px 8px;border-radius:20px;letter-spacing:.3px">🤖 AI PICK</div>
+        <div style="position:absolute;top:10px;left:10px;background:linear-gradient(135deg,#006D77,#2E8B57);color:#fff;font-size:10px;font-weight:800;padding:4px 10px;border-radius:20px;letter-spacing:.3px;box-shadow:0 2px 8px rgba(0,0,0,.15);max-width:85%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">✨ <?=htmlspecialchars($p['_rec_badge']??'🤖 AI PICK')?></div>
       </a>
       <div class="prod-body">
         <div class="prod-store">🏪 <?=htmlspecialchars($p['store_name'])?></div>
         <div class="prod-name"><?=htmlspecialchars($p['name'])?></div>
+        <div style="font-size:11px;color:#006D77;font-weight:600;margin-top:2px;margin-bottom:6px">💡 <?=htmlspecialchars($p['_rec_reason']??'Recommended for you')?></div>
         <div class="prod-price-row">
           <span class="prod-price">₹<?=number_format($p['price'],0)?></span>
           <?php if($p['mrp']>$p['price']): ?><span class="prod-mrp">₹<?=number_format($p['mrp'],0)?></span><?php endif; ?>

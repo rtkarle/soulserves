@@ -66,9 +66,10 @@ $stats['pending_don'] = $stats['food_pending'] + $stats['cloth_pending'];
 require_once __DIR__ . '/../api/ai_engine.php';
 $ai = adhaar_ai();
 // Only load quick cached AI stats — heavy AI deferred to AJAX on demand
-$ai_impact   = ai_cached('admin_impact',   300, fn()=> $ai->predictImpact()           ?: []);
-$ai_forecast = ai_cached('admin_forecast', 600, fn()=> $ai->demandForecast()          ?: []);
-$ai_recs     = ai_cached('admin_recs',     300, fn()=> $ai->getAdminRecommendations() ?: []);
+$ai_impact    = ai_cached('admin_impact',   300, fn()=> $ai->predictImpact()           ?: []);
+$ai_forecast  = ai_cached('admin_forecast', 600, fn()=> $ai->demandForecast()          ?: []);
+$ai_recs      = ai_cached('admin_recs',     300, fn()=> $ai->getAdminRecommendations() ?: []);
+$ai_analytics = ai_cached('admin_ai_comprehensive', 180, fn()=> $ai->getComprehensiveAIAnalytics() ?: []);
 
 // ── Weekly chart — single GROUP BY query instead of 8 loops ─────────────
 $w_labels = $w_food = $w_cloth = [];
@@ -766,7 +767,7 @@ body{ background:var(--bg); color:var(--text); min-height:100vh; }
             <input type="hidden" name="status" value="scheduled">
             <div class="schedule-inputs">
               <input type="date"  name="pickup_date" required>
-              <input type="text"  name="pickup_time" placeholder="e.g. 10 AM – 12 PM" required>
+              <input type="time"  name="pickup_time" required title="Select pickup time">
               <input type="email" name="volunteer_email" placeholder="Volunteer email" required>
               <button class="btn btn-schedule">📅 Schedule</button>
             </div>
@@ -853,7 +854,7 @@ body{ background:var(--bg); color:var(--text); min-height:100vh; }
           <form method="POST" action="../api/update_status.php"><?=csrf_field()?><input type="hidden" name="id" value="<?=$f['id']?>"><input type="hidden" name="table" value="food_donations"><input type="hidden" name="status" value="scheduled">
           <div class="schedule-inputs">
             <input type="date" name="pickup_date" required>
-            <input type="text" name="pickup_time" placeholder="e.g. 10 AM – 12 PM" required>
+            <input type="time" name="pickup_time" required title="Select pickup time">
             <input type="email" name="volunteer_email" placeholder="Volunteer email" required>
             <button class="btn btn-schedule">📅 Schedule</button>
           </div></form>
@@ -908,7 +909,7 @@ body{ background:var(--bg); color:var(--text); min-height:100vh; }
           <form method="POST" action="../api/update_status.php"><?=csrf_field()?><input type="hidden" name="id" value="<?=$c['id']?>"><input type="hidden" name="table" value="cloth_donations"><input type="hidden" name="status" value="scheduled">
           <div class="schedule-inputs">
             <input type="date" name="pickup_date" required>
-            <input type="text" name="pickup_time" placeholder="e.g. 10 AM – 12 PM" required>
+            <input type="time" name="pickup_time" required title="Select pickup time">
             <input type="email" name="volunteer_email" placeholder="Volunteer email" required>
             <button class="btn btn-schedule">📅 Schedule</button>
           </div></form>
@@ -1354,9 +1355,141 @@ function openEditModal(ev) {
 </div>
 
 <!-- Weekly Chart -->
-<div class="chart-card" style="margin-bottom:20px">
+<div class="chart-card" style="margin-bottom:24px">
   <h4>📊 Weekly Donation Volume (Last 8 Weeks)</h4>
   <div style="position:relative;height:260px"><canvas id="weeklyAdminChart"></canvas></div>
+</div>
+
+<!-- ══ AI COMPREHENSIVE OPERATIONAL ANALYTICS ══ -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px">
+  <div class="chart-card" style="text-align:center;padding:18px">
+    <div style="font-size:22px;margin-bottom:4px">🍱</div>
+    <div style="font-size:24px;font-weight:900;color:var(--accent)"><?=number_format($ai_analytics['impact_metrics']['food_meals']??0)?></div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Meals Delivered</div>
+  </div>
+  <div class="chart-card" style="text-align:center;padding:18px">
+    <div style="font-size:22px;margin-bottom:4px">👕</div>
+    <div style="font-size:24px;font-weight:900;color:#2563eb"><?=number_format($ai_analytics['impact_metrics']['cloth_items']??0)?></div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Clothes Repurposed</div>
+  </div>
+  <div class="chart-card" style="text-align:center;padding:18px">
+    <div style="font-size:22px;margin-bottom:4px">💧</div>
+    <div style="font-size:24px;font-weight:900;color:#059669"><?=number_format($ai_analytics['impact_metrics']['water_saved_liters']??0)?> L</div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Water Conserved</div>
+  </div>
+  <div class="chart-card" style="text-align:center;padding:18px">
+    <div style="font-size:22px;margin-bottom:4px">⚡</div>
+    <div style="font-size:24px;font-weight:900;color:#d97706"><?=$ai_analytics['volunteer_velocity']['readiness_score']??0?>%</div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase">Fleet Readiness Score</div>
+  </div>
+</div>
+
+<!-- ══ 1. ZONE & PINCODE COVERAGE INTELLIGENCE ══ -->
+<div class="chart-card" style="margin-bottom:24px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <div>
+      <h4 style="margin:0;font-size:16px;font-weight:800">📍 High-Demand Zone &amp; Volunteer Coverage Intelligence</h4>
+      <p style="margin:2px 0 0;font-size:12px;color:var(--muted)">AI pin-level monitoring of incoming donations vs active volunteer distribution</p>
+    </div>
+    <span style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:20px;background:#e0f2fe;color:#0369a1">
+      Analyzed <?=$ai_analytics['zone_coverage']['total_zones']??0?> Zones
+    </span>
+  </div>
+
+  <?php if(empty($ai_analytics['zone_coverage']['top_zones'])): ?>
+    <div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No zone activity recorded yet.</div>
+  <?php else: ?>
+    <div class="table-wrap"><div class="table-scroll"><table>
+      <thead>
+        <tr>
+          <th>Pincode / Zone</th>
+          <th>Total Donations</th>
+          <th>Pending Pickups</th>
+          <th>Registered Volunteers</th>
+          <th>Coverage Status</th>
+          <th>AI Strategic Recommendation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach($ai_analytics['zone_coverage']['top_zones'] as $z): 
+          $s = $z['status'];
+          $bg = $s === 'deficit' ? '#fee2e2' : ($s === 'moderate' ? '#fef3c7' : '#d1fae5');
+          $col = $s === 'deficit' ? '#991b1b' : ($s === 'moderate' ? '#92400e' : '#065f46');
+        ?>
+        <tr>
+          <td><strong style="color:var(--text);font-family:monospace;font-size:13px">📍 <?=htmlspecialchars($z['zone'])?></strong></td>
+          <td><strong><?=(int)$z['total_donations']?></strong></td>
+          <td><span style="font-weight:800;color:<?=$z['pending_pickups']>0?'#ef4444':'var(--text)'?>"><?=(int)$z['pending_pickups']?></span></td>
+          <td><strong><?=(int)$z['volunteers']?></strong></td>
+          <td><span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:<?=$bg?>;color:<?=$col?>"><?=$z['status_label']?></span></td>
+          <td style="font-size:12px;color:var(--muted);max-width:240px"><?=htmlspecialchars($z['recommendation'])?></td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table></div></div>
+  <?php endif; ?>
+</div>
+
+<!-- ══ 2. FOOD FRESHNESS & SPOILAGE URGENCY RISK ANALYSIS ══ -->
+<div class="chart-card" style="margin-bottom:24px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div>
+      <h4 style="margin:0;font-size:16px;font-weight:800">🍱 Food Freshness &amp; Spoilage Urgency Risk Analysis</h4>
+      <p style="margin:2px 0 0;font-size:12px;color:var(--muted)">Predictive freshness tracking based on prepared timestamp and safe hours</p>
+    </div>
+    <div style="font-size:13px;font-weight:800;color:#991b1b;background:#fee2e2;padding:5px 14px;border-radius:20px">
+      ⚠️ <?=(int)($ai_analytics['spoilage_risk']['meals_at_risk']??0)?> Meals at Risk
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px">
+    <div style="background:#fee2e2;border-radius:12px;padding:14px;text-align:center;border:1px solid #fca5a5">
+      <div style="font-size:24px;font-weight:900;color:#991b1b"><?=(int)($ai_analytics['spoilage_risk']['critical_count']??0)?></div>
+      <div style="font-size:11px;font-weight:700;color:#991b1b;text-transform:uppercase">🔴 Critical (&lt; 6 hrs remaining)</div>
+    </div>
+    <div style="background:#fef3c7;border-radius:12px;padding:14px;text-align:center;border:1px solid #fde68a">
+      <div style="font-size:24px;font-weight:900;color:#92400e"><?=(int)($ai_analytics['spoilage_risk']['urgent_count']??0)?></div>
+      <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase">🟡 Urgent (Consume Today)</div>
+    </div>
+    <div style="background:#d1fae5;border-radius:12px;padding:14px;text-align:center;border:1px solid #a7f3d0">
+      <div style="font-size:24px;font-weight:900;color:#065f46"><?=(int)($ai_analytics['spoilage_risk']['fresh_count']??0)?></div>
+      <div style="font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase">🟢 Freshly Prepared</div>
+    </div>
+  </div>
+
+  <?php if(!empty($ai_analytics['spoilage_risk']['items'])): ?>
+    <h5 style="margin:0 0 10px;font-size:13px;font-weight:700">Urgent Food Pickups Requiring Fast Dispatch:</h5>
+    <div class="table-wrap"><div class="table-scroll"><table>
+      <thead>
+        <tr>
+          <th>#ID</th>
+          <th>Quantity</th>
+          <th>Pickup Address</th>
+          <th>Time Elapsed</th>
+          <th>Freshness Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach($ai_analytics['spoilage_risk']['items'] as $it): 
+          $u = $it['urgency'];
+          $bg = $u === 'critical' ? '#fee2e2' : ($u === 'urgent' ? '#fef3c7' : '#d1fae5');
+          $col = $u === 'critical' ? '#991b1b' : ($u === 'urgent' ? '#92400e' : '#065f46');
+        ?>
+        <tr>
+          <td style="font-weight:700">#<?=(int)$it['id']?></td>
+          <td><strong><?=(int)$it['quantity']?> meals</strong></td>
+          <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?=htmlspecialchars($it['pickup_address'])?></td>
+          <td><strong><?=(int)$it['age_hours']?> hrs ago</strong></td>
+          <td><span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:<?=$bg?>;color:<?=$col?>"><?=$it['urgency_label']?></span></td>
+          <td>
+            <a href="admin_dashboard.php?tab=assign&food_id=<?=(int)$it['id']?>" class="btn btn-accept" style="padding:4px 10px;font-size:11px;text-decoration:none;display:inline-block">🤖 Auto-Assign</a>
+          </td>
+        </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table></div></div>
+  <?php endif; ?>
 </div>
 </div>
 

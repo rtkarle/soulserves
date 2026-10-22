@@ -9,11 +9,8 @@ $is_logged_in = isset($_SESSION['user_email']);
 $me   = $is_logged_in ? $_SESSION['user_email'] : '';
 $role = $_SESSION['role'] ?? 'donor';
 
-$ai = null;
-if ($is_logged_in) {
-    require_once __DIR__ . '/../api/ai_engine.php';
-    $ai = adhaar_ai();
-}
+require_once __DIR__ . '/../api/ai_engine.php';
+$ai = adhaar_ai();
 
 $id = (int)($_GET['id'] ?? 0);
 if (!$id) { header("Location: shop.php"); exit; }
@@ -23,8 +20,10 @@ $pq->bind_param("i",$id); $pq->execute();
 $p = $pq->get_result()->fetch_assoc();
 if (!$p) { header("Location: shop.php"); exit; }
 
-// ── Log product view for AI recommendations (logged-in only) ───────────────────
-if ($ai) $ai->logView($me, $id);
+// ── Log product view for AI recommendations (tracks session + DB) ───────────────
+if ($ai) {
+    $ai->logView($me, $id);
+}
 
 $rq = $conn->prepare("SELECT r.*, u.name FROM product_reviews r JOIN register u ON u.email=r.reviewer_email WHERE r.product_id=? ORDER BY r.created_at DESC LIMIT 20");
 $rq->bind_param("i",$id); $rq->execute();
@@ -341,21 +340,22 @@ header{position:sticky;top:0;background:rgba(255,255,255,.95);backdrop-filter:bl
   <?php if(!empty($ai_recs)): ?>
   <div class="ai-recs-section">
     <h3>🤖 AI Recommended For You
-      <span style="font-size:11px;background:#f0ede5;padding:4px 11px;border-radius:20px;font-weight:600;color:var(--muted)">Based on your browsing history</span>
+      <span style="font-size:11px;background:#e8fdf5;color:#006D77;padding:4px 11px;border-radius:20px;font-weight:700">Personalized based on multiple views &amp; searches</span>
     </h3>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Products matching your interests</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Products you frequently browsed or searched for</p>
     <div class="ai-recs-grid">
       <?php foreach($ai_recs as $ar):
         $arimg = !empty($ar['image1']) ? image_url($ar['image1']) : null;
         $ar_disc = ($ar['mrp'] && $ar['mrp']>$ar['price']) ? round((($ar['mrp']-$ar['price'])/$ar['mrp'])*100) : 0;
       ?>
       <div class="ai-rec-card" onclick="location.href='product.php?id=<?=(int)$ar['id']?>'">
-        <span class="ai-badge">🤖 AI PICK</span>
+        <span class="ai-badge" style="background:linear-gradient(135deg,#006D77,#2E8B57);color:#fff;font-size:9px;font-weight:800;padding:3px 8px;border-radius:20px;max-width:85%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><?=htmlspecialchars($ar['_rec_badge']??'🤖 AI PICK')?></span>
         <?php if($arimg): ?><img src="<?=htmlspecialchars($arimg)?>" class="rel-img" alt="">
         <?php else: ?><div style="height:140px;background:linear-gradient(135deg,#f0ede5,#e8e4d8);display:flex;align-items:center;justify-content:center;font-size:32px">🛍️</div><?php endif; ?>
         <div class="rel-body">
           <div style="font-size:10px;color:var(--muted);margin-bottom:2px">🏪 <?=htmlspecialchars($ar['store_name'])?></div>
           <div class="rel-name"><?=htmlspecialchars($ar['name'])?></div>
+          <div style="font-size:10px;color:#006D77;font-weight:600;margin-top:2px;margin-bottom:3px">💡 <?=htmlspecialchars($ar['_rec_reason']??'Recommended for you')?></div>
           <div style="display:flex;align-items:baseline;gap:6px;margin-top:4px">
             <span class="rel-price">₹<?=number_format($ar['price'],2)?></span>
             <?php if($ar_disc>0): ?><span style="font-size:10px;background:#d1fae5;color:#065f46;padding:1px 6px;border-radius:5px;font-weight:700"><?=$ar_disc?>% off</span><?php endif; ?>
