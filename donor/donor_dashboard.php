@@ -381,7 +381,7 @@ $STATUS_ICONS =['📝','✅','📅','🚚','📦','🎉'];
     <div style="display:flex;align-items:center;gap:10px">
       <!-- Notification Bell -->
       <div class="notif-bell-wrap" id="notifBellWrap">
-        <button type="button" class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifs()" aria-label="Notifications">
+        <button type="button" class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifs(event)" aria-label="Notifications">
           🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span>
         </button>
         <div class="notif-dropdown" id="notifDropdown">
@@ -930,124 +930,181 @@ window.addEventListener('load', () => {
     school_supplies:'🎒 School Supplies', toys:'🧸 Toys', medicines:'💊 Medicines',
     electronics:'📱 Electronics', furniture:'🪑 Furniture', other:'📦 Other'
   };
-  const cat = '<?=htmlspecialchars($success)?>';
+  const catColors = {
+    food:'#f59e0b', clothes:'#3b82f6', study_material:'#8b5cf6',
+    school_supplies:'#ec4899', toys:'#f97316', medicines:'#ef4444',
+    electronics:'#06b6d4', furniture:'#84cc16', other:'#6b7280'
+  };
+  const cat   = '<?=htmlspecialchars($success)?>';
   const donId = '<?=htmlspecialchars($don_id)?>';
   const label = catLabels[cat] || '🎁 Donation';
+  const color = catColors[cat] || '#006D77';
 
-  // Create popup card
-  const overlay = document.createElement('div');
-  overlay.id = 'donSuccessOverlay';
-  overlay.style.cssText = `
-    position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;
-    display:flex;align-items:center;justify-content:center;padding:20px;
-    backdrop-filter:blur(6px);animation:fadeInBg .3s ease;
-  `;
-
-  overlay.innerHTML = `
-    <div style="
-      background:#fff;border-radius:28px;padding:40px 36px;max-width:420px;width:100%;
-      box-shadow:0 32px 80px rgba(0,0,0,.25);text-align:center;
-      animation:popIn .4s cubic-bezier(.22,1,.36,1);position:relative;
-    ">
-      <!-- Confetti dots -->
-      <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);font-size:28px;letter-spacing:6px">🎊 🎉 🎊</div>
-
-      <!-- Success icon -->
-      <div style="
-        width:80px;height:80px;border-radius:50%;
-        background:linear-gradient(135deg,#006D77,#2E8B57);
-        display:flex;align-items:center;justify-content:center;
-        margin:16px auto 20px;box-shadow:0 12px 32px rgba(0,109,119,.3);
-        font-size:36px;animation:bounceIn .6s .2s both;
-      ">✅</div>
-
-      <!-- Title -->
-      <h2 style="font-size:22px;font-weight:900;color:#102A43;margin-bottom:8px;letter-spacing:-.3px">
-        Donation Submitted!
-      </h2>
-      <p style="font-size:14px;color:#5A7184;margin-bottom:24px;line-height:1.6">
-        Your <strong>${label}</strong> donation has been received.<br>
-        We'll review and schedule a pickup shortly. 🙏
-      </p>
-
-      <!-- Donation ID badge -->
-      <div style="
-        background:linear-gradient(135deg,rgba(0,109,119,.08),rgba(46,139,87,.06));
-        border:1.5px solid rgba(0,109,119,.2);border-radius:14px;
-        padding:14px 20px;margin-bottom:24px;
-      ">
-        <div style="font-size:11px;font-weight:700;color:#5A7184;text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px">Donation ID</div>
-        <div style="font-size:18px;font-weight:900;color:#006D77;font-family:monospace;letter-spacing:1px">${donId}</div>
-      </div>
-
-      <!-- Status steps preview -->
-      <div style="display:flex;justify-content:center;gap:0;margin-bottom:28px">
-        ${['Submitted','Review','Scheduled','Pickup','Delivered'].map((s,i)=>`
-          <div style="display:flex;flex-direction:column;align-items:center;flex:1">
-            <div style="
-              width:28px;height:28px;border-radius:50%;font-size:11px;font-weight:800;
-              display:flex;align-items:center;justify-content:center;
-              background:${i===0?'linear-gradient(135deg,#006D77,#2E8B57)':'#E2EBE9'};
-              color:${i===0?'#fff':'#94A3B8'};
-              box-shadow:${i===0?'0 4px 12px rgba(0,109,119,.3)':'none'};
-            ">${i===0?'✓':i+1}</div>
-            <div style="font-size:9px;color:${i===0?'#006D77':'#94A3B8'};margin-top:4px;font-weight:${i===0?700:400}">${s}</div>
-            ${i<4?`<div style="position:relative;margin-bottom:16px"></div>`:''}
-          </div>
-        `).join('')}
-      </div>
-
-      <!-- Buttons -->
-      <div style="display:flex;gap:10px">
-        <button onclick="document.getElementById('donSuccessOverlay').remove()" style="
-          flex:1;padding:13px;border:2px solid #E2EBE9;border-radius:12px;
-          background:#fff;color:#5A7184;font-size:14px;font-weight:700;cursor:pointer;
-          transition:.2s;font-family:inherit;
-        " onmouseover="this.style.borderColor='#006D77';this.style.color='#006D77'"
-           onmouseout="this.style.borderColor='#E2EBE9';this.style.color='#5A7184'">
-          Stay Here
-        </button>
-        <a href="track.php" style="
-          flex:1;padding:13px;border:none;border-radius:12px;
-          background:linear-gradient(135deg,#006D77,#2E8B57);color:#fff;
-          font-size:14px;font-weight:700;cursor:pointer;text-decoration:none;
-          display:flex;align-items:center;justify-content:center;gap:6px;
-          box-shadow:0 8px 24px rgba(0,109,119,.25);transition:.2s;
-        ">
-          📍 Track Donation
-        </a>
-      </div>
-
-      <!-- Close X -->
-      <button onclick="document.getElementById('donSuccessOverlay').remove()" style="
-        position:absolute;top:16px;right:16px;background:none;border:none;
-        font-size:20px;cursor:pointer;color:#94A3B8;width:32px;height:32px;
-        border-radius:50%;display:flex;align-items:center;justify-content:center;
-        transition:.2s;
-      " onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">✕</button>
-    </div>
-  `;
-
-  // Animations
+  /* ── Inject popup styles ── */
   const style = document.createElement('style');
   style.textContent = `
-    @keyframes fadeInBg { from{opacity:0} to{opacity:1} }
-    @keyframes popIn { from{opacity:0;transform:translateY(30px) scale(.92)} to{opacity:1;transform:none} }
-    @keyframes bounceIn { 0%{transform:scale(0)} 60%{transform:scale(1.15)} 100%{transform:scale(1)} }
+    @keyframes ssOverlayIn { from{opacity:0} to{opacity:1} }
+    @keyframes ssCardIn  { from{opacity:0;transform:translateY(40px) scale(.92)} to{opacity:1;transform:none} }
+    @keyframes ssCheckIn { 0%{transform:scale(0) rotate(-45deg);opacity:0} 60%{transform:scale(1.25) rotate(5deg);opacity:1} 100%{transform:scale(1) rotate(0)} }
+    @keyframes ssConfetti{ 0%{transform:translateY(0) rotate(0);opacity:1} 100%{transform:translateY(-80px) rotate(720deg);opacity:0} }
+    @keyframes ssBar     { from{width:100%} to{width:0} }
+    @keyframes ssPulseGreen { 0%,100%{box-shadow:0 0 0 0 rgba(16,185,129,.4)} 50%{box-shadow:0 0 0 12px rgba(16,185,129,0)} }
+
+    #ssDonPopup { position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;
+      padding:16px;background:rgba(10,25,47,.7);backdrop-filter:blur(10px);
+      animation:ssOverlayIn .3s ease forwards; }
+    #ssDonPopup .ss-card {
+      background:#fff;border-radius:28px;width:100%;max-width:420px;
+      box-shadow:0 40px 100px rgba(0,0,0,.35);overflow:hidden;
+      animation:ssCardIn .45s cubic-bezier(.22,1,.36,1) forwards;
+      position:relative;
+    }
+    #ssDonPopup .ss-top {
+      padding:32px 28px 24px;text-align:center;
+      background:linear-gradient(135deg,#f0fdf4,#ecfdf5);
+    }
+    #ssDonPopup .ss-check-ring {
+      width:80px;height:80px;border-radius:50%;
+      background:linear-gradient(135deg,#10b981,#059669);
+      display:flex;align-items:center;justify-content:center;
+      margin:0 auto 18px;font-size:36px;
+      animation:ssCheckIn .6s .15s cubic-bezier(.34,1.56,.64,1) both, ssPulseGreen 2s 1s infinite;
+      box-shadow:0 12px 32px rgba(16,185,129,.35);
+    }
+    #ssDonPopup .ss-title { font-size:22px;font-weight:900;color:#064e3b;margin-bottom:6px;font-family:Inter,sans-serif; }
+    #ssDonPopup .ss-sub   { font-size:13px;color:#065f46;line-height:1.6;font-family:Inter,sans-serif; }
+    #ssDonPopup .ss-body  { padding:20px 28px 24px; }
+    #ssDonPopup .ss-id-box {
+      background:linear-gradient(135deg,rgba(0,109,119,.06),rgba(46,139,87,.04));
+      border:2px dashed rgba(0,109,119,.25);border-radius:16px;
+      padding:16px;text-align:center;margin-bottom:20px;
+    }
+    #ssDonPopup .ss-id-label { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#5A7184;margin-bottom:5px;font-family:Inter,sans-serif; }
+    #ssDonPopup .ss-id-val   { font-size:20px;font-weight:900;color:#006D77;font-family:'Courier New',monospace;letter-spacing:2px; }
+    #ssDonPopup .ss-cat-badge {
+      display:inline-flex;align-items:center;gap:6px;
+      padding:6px 16px;border-radius:20px;font-size:13px;font-weight:700;
+      margin-bottom:20px;
+    }
+    #ssDonPopup .ss-steps {
+      display:flex;align-items:center;margin-bottom:22px;
+    }
+    #ssDonPopup .ss-step {
+      display:flex;flex-direction:column;align-items:center;flex:1;gap:4px;
+    }
+    #ssDonPopup .ss-step-dot {
+      width:26px;height:26px;border-radius:50%;font-size:11px;font-weight:800;
+      display:flex;align-items:center;justify-content:center;
+    }
+    #ssDonPopup .ss-step-dot.done { background:linear-gradient(135deg,#006D77,#2E8B57);color:#fff;box-shadow:0 3px 10px rgba(0,109,119,.3); }
+    #ssDonPopup .ss-step-dot.pending { background:#f1f5f9;color:#94a3b8; }
+    #ssDonPopup .ss-step-line { flex:1;height:2px;background:#e2e8f0;margin-bottom:18px; }
+    #ssDonPopup .ss-step-line.done { background:linear-gradient(90deg,#006D77,#2E8B57); }
+    #ssDonPopup .ss-step span { font-size:9px;font-weight:600;color:#5A7184;text-align:center;max-width:52px; }
+    #ssDonPopup .ss-step.done span { color:#006D77;font-weight:700; }
+    #ssDonPopup .ss-actions { display:flex;gap:10px; }
+    #ssDonPopup .ss-btn-secondary {
+      flex:1;padding:13px;border:2px solid #e2ebe9;border-radius:14px;
+      background:#fff;color:#5A7184;font-size:14px;font-weight:700;
+      cursor:pointer;font-family:Inter,sans-serif;transition:.2s;
+    }
+    #ssDonPopup .ss-btn-secondary:hover { border-color:#006D77;color:#006D77; }
+    #ssDonPopup .ss-btn-primary {
+      flex:1;padding:13px;border:none;border-radius:14px;
+      background:linear-gradient(135deg,#006D77,#2E8B57);color:#fff;
+      font-size:14px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif;
+      text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;
+      box-shadow:0 8px 24px rgba(0,109,119,.25);transition:.2s;
+    }
+    #ssDonPopup .ss-btn-primary:hover { transform:translateY(-1px);box-shadow:0 12px 32px rgba(0,109,119,.35); }
+    #ssDonPopup .ss-timer-bar {
+      height:3px;background:linear-gradient(90deg,#006D77,#2E8B57);
+      animation:ssBar 8s linear forwards;
+    }
+    #ssDonPopup .ss-close {
+      position:absolute;top:14px;right:14px;width:32px;height:32px;
+      border-radius:50%;background:rgba(0,0,0,.06);border:none;
+      font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+      color:#5A7184;transition:.2s;font-family:Inter,sans-serif;
+    }
+    #ssDonPopup .ss-close:hover { background:rgba(0,0,0,.12);color:#102A43; }
+    #ssDonPopup .ss-confetti-wrap {
+      position:absolute;top:0;left:0;right:0;height:0;overflow:visible;pointer-events:none;
+    }
+    #ssDonPopup .ss-confetti-dot {
+      position:absolute;width:8px;height:8px;border-radius:50%;
+      animation:ssConfetti .8s ease forwards;
+    }
   `;
   document.head.appendChild(style);
 
-  document.body.appendChild(overlay);
+  /* ── Confetti dots ── */
+  const confettiColors = ['#006D77','#2E8B57','#FF8A00','#F72585','#06B6D4','#7B2CBF'];
+  const confettiHTML = Array.from({length:12}, (_,i) => {
+    const c = confettiColors[i % confettiColors.length];
+    const x = 8 + (i * 7.5);
+    const delay = (i * 0.06).toFixed(2);
+    return `<div class="ss-confetti-dot" style="left:${x}%;background:${c};animation-delay:${delay}s;animation-duration:${0.7+i*0.05}s"></div>`;
+  }).join('');
 
-  // Close on overlay click
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.remove();
-  });
+  /* ── Status steps ── */
+  const steps = ['Submitted','Review','Scheduled','Pickup','Delivered'];
+  const stepsHTML = steps.map((s,i) => `
+    <div class="ss-step ${i===0?'done':''}">
+      <div class="ss-step-dot ${i===0?'done':'pending'}">${i===0?'✓':i+1}</div>
+      <span>${s}</span>
+    </div>
+    ${i<steps.length-1?`<div class="ss-step-line ${i<0?'done':''}"></div>`:''}
+  `).join('');
 
-  // Auto-close after 8 seconds
-  setTimeout(() => { if(document.getElementById('donSuccessOverlay')) document.getElementById('donSuccessOverlay').remove(); }, 8000);
+  /* ── Build popup ── */
+  const popup = document.createElement('div');
+  popup.id = 'ssDonPopup';
+  popup.innerHTML = `
+    <div class="ss-card">
+      <div class="ss-confetti-wrap">${confettiHTML}</div>
+      <button class="ss-close" onclick="closeDonPopup()">✕</button>
+
+      <div class="ss-top">
+        <div class="ss-check-ring">✓</div>
+        <div class="ss-title">Donation Submitted! 🎉</div>
+        <div class="ss-sub">Your <strong>${label}</strong> donation has been received.<br>We'll review and schedule pickup shortly.</div>
+      </div>
+
+      <div class="ss-body">
+        <div class="ss-id-box">
+          <div class="ss-id-label">Your Donation ID</div>
+          <div class="ss-id-val">${donId}</div>
+        </div>
+
+        <span class="ss-cat-badge" style="background:${color}18;color:${color};border:1.5px solid ${color}30">
+          ${label}
+        </span>
+
+        <div class="ss-steps">${stepsHTML}</div>
+
+        <div class="ss-actions">
+          <button class="ss-btn-secondary" onclick="closeDonPopup()">Stay Here</button>
+          <a href="track.php" class="ss-btn-primary">📍 Track Donation</a>
+        </div>
+      </div>
+
+      <div class="ss-timer-bar"></div>
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+  popup.addEventListener('click', e => { if(e.target===popup) closeDonPopup(); });
+  window._donPopupTimer = setTimeout(closeDonPopup, 8000);
 });
+
+function closeDonPopup() {
+  clearTimeout(window._donPopupTimer);
+  const p = document.getElementById('ssDonPopup');
+  if (p) { p.style.opacity='0'; p.style.transition='opacity .3s'; setTimeout(()=>p.remove(),300); }
+}
 <?php endif; ?>
+
 /* ── AI Chatbot ── */
 let chatOpen=false;
 function toggleChat(){

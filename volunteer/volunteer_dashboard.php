@@ -153,12 +153,8 @@ try {
 } catch (Throwable $e) {}
 
 /* ── Combine cart + order counts ── */
-$shop_counts = $conn->query("SELECT
-    (SELECT COUNT(*) FROM cart   WHERE user_email='$me')   AS cart_count,
-    (SELECT COUNT(*) FROM orders WHERE buyer_email='$me')  AS order_count
-  FROM DUAL")->fetch_assoc();
-$cart_count  = (int)($shop_counts['cart_count']  ?? 0);
-$order_count = (int)($shop_counts['order_count'] ?? 0);
+$cart_count  = (int)($conn->query("SELECT COUNT(*) c FROM cart   WHERE user_email='$me'")->fetch_assoc()['c'] ?? 0);
+$order_count = (int)($conn->query("SELECT COUNT(*) c FROM orders WHERE buyer_email='$me'")->fetch_assoc()['c'] ?? 0);
 
 /* ── ETA for each assigned donation — cached per donation ── */
 $etas = [];
@@ -403,7 +399,7 @@ $comp_rate    = (int)($ai_workload['completion_rate'] ?? 0);
     <div style="display:flex;align-items:center;gap:10px">
       <!-- Notification Bell -->
       <div class="notif-bell-wrap" id="notifBellWrap">
-        <button type="button" class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifs()" aria-label="Notifications">
+        <button type="button" class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotifs(event)" aria-label="Notifications">
           🔔<span class="notif-badge" id="notifBadge" style="display:none">0</span>
         </button>
         <div class="notif-dropdown" id="notifDropdown">
@@ -1086,70 +1082,125 @@ if(navigator.geolocation && <?=count($assigned)?> > 0){
 <script>
 /* ── FCFS Claim Task Function ── */
 function claimTask(donationId, table, categoryName, area) {
-  SoulServeModal.confirm({
-    title: 'Claim Task: ' + categoryName + ' 🚚',
-    text: `Are you sure you want to claim this pickup in <strong>${area}</strong>?<br><br><small style="color:var(--muted)">This task is claimed on a <strong>First-Come, First-Served</strong> basis. Once claimed, you will be assigned to complete the pickup.</small>`,
-    icon: '✋',
-    confirmText: 'Yes, Claim Task 🚚',
-    cancelText: 'Cancel',
-    onConfirm: () => {
-      const formData = new URLSearchParams();
-      formData.append('donation_id', donationId);
-      formData.append('table', table);
+function claimTask(donationId, table, categoryName, area) {
+  /* ── Simple confirm first (works even if SoulServeModal not loaded) ── */
+  const doConfirm = (cb) => {
+    if (window.SoulServeModal) {
+      SoulServeModal.confirm({
+        title: 'Claim Task: ' + categoryName + ' 🚚',
+        text: `Claim pickup in <strong>${area}</strong>?<br><small style="color:#5A7184">First-Come, First-Served — you'll be assigned immediately.</small>`,
+        icon: '✋',
+        confirmText: 'Yes, Claim Task 🚚',
+        cancelText: 'Cancel',
+        onConfirm: cb
+      });
+    } else {
+      if (confirm('Claim ' + categoryName + ' pickup in ' + area + '?\n\nFirst-Come, First-Served — you\'ll be assigned immediately.')) {
+        cb();
+      }
+    }
+  };
 
-      return fetch('../api/claim_task.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData.toString()
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
+  doConfirm(() => {
+    /* Find and disable the button */
+    const cardIds = [`nearby-card-${table}-${donationId}`, `nearby-tab-card-${table}-${donationId}`];
+    cardIds.forEach(id => {
+      const card = document.getElementById(id);
+      if (card) {
+        const btn = card.querySelector('.btn-claim-task');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Claiming…'; }
+      }
+    });
+
+    const formData = new URLSearchParams();
+    formData.append('donation_id', donationId);
+    formData.append('table', table);
+
+    fetch('../api/claim_task.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString()
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        /* Remove from nearby list */
+        cardIds.forEach(id => document.getElementById(id)?.remove());
+
+        /* Show success UI */
+        if (window.SoulServeModal) {
           SoulServeModal.celebrate({
             title: 'Task Claimed! 🎉',
-            message: `You have successfully claimed this <strong>${categoryName}</strong> task. It is now in your Active Pickups.`,
+            message: `You claimed this <strong>${categoryName}</strong> task in <strong>${area}</strong>. Check Active Pickups!`,
             donId: data.don_code || '',
             btnText: 'Go to Active Pickups'
           });
-          document.getElementById(`nearby-card-${table}-${donationId}`)?.remove();
-          document.getElementById(`nearby-tab-card-${table}-${donationId}`)?.remove();
-          setTimeout(() => { openTab('assigned'); location.reload(); }, 1500);
-        } else if (data.code === 'ALREADY_CLAIMED') {
-          SoulServeModal.confirm({
-            title: 'Already Claimed! ⚡',
-            text: data.message,
-            icon: '⚠️',
-            confirmText: 'Got It',
-            cancelText: 'Close'
-          });
-          document.getElementById(`nearby-card-${table}-${donationId}`)?.remove();
-          document.getElementById(`nearby-tab-card-${table}-${donationId}`)?.remove();
         } else {
-          SoulServeToast.show(data.message || 'Could not claim task.', 'error');
+          showVolToast('✅ Task claimed! Check Active Pickups.', 'success');
         }
-      })
-      .catch(err => {
-        SoulServeToast.show('Network error while claiming task.', 'error');
+
+        setTimeout(() => { openTab('assigned'); location.reload(); }, 1800);
+
+      } else if (data.code === 'ALREADY_CLAIMED') {
+        cardIds.forEach(id => document.getElementById(id)?.remove());
+        showVolToast('⚡ ' + (data.message || 'Already claimed by another volunteer.'), 'warning');
+      } else {
+        showVolToast('❌ ' + (data.message || 'Could not claim task.'), 'error');
+        /* Re-enable button */
+        cardIds.forEach(id => {
+          const btn = document.getElementById(id)?.querySelector('.btn-claim-task');
+          if (btn) { btn.disabled = false; btn.textContent = '✋ Claim Task (FCFS)'; }
+        });
+      }
+    })
+    .catch(() => {
+      showVolToast('🌐 Network error. Please try again.', 'error');
+      cardIds.forEach(id => {
+        const btn = document.getElementById(id)?.querySelector('.btn-claim-task');
+        if (btn) { btn.disabled = false; btn.textContent = '✋ Claim Task (FCFS)'; }
       });
-    }
+    });
   });
+}
+
+/* ── Simple toast fallback for volunteer dashboard ── */
+function showVolToast(msg, type) {
+  if (window.SoulServeToast) { SoulServeToast.show(msg, type); return; }
+  const t = document.createElement('div');
+  const colors = {success:'#065f46',error:'#991b1b',warning:'#92400e',info:'#1e40af'};
+  const bgs = {success:'#d1fae5',error:'#fee2e2',warning:'#fef3c7',info:'#dbeafe'};
+  t.style.cssText = `position:fixed;bottom:90px;right:20px;z-index:99999;
+    padding:12px 18px;border-radius:12px;font-size:13px;font-weight:600;
+    font-family:Inter,sans-serif;max-width:300px;
+    background:${bgs[type]||bgs.info};color:${colors[type]||colors.info};
+    box-shadow:0 8px 24px rgba(0,0,0,.15);animation:ssSlideIn .3s ease;`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 3500);
 }
 
 /* ── In-App Notification Drawer ── */
 let notifsLoaded = false;
+
 function toggleNotifs(e) {
   if (e) e.stopPropagation();
-  const dropdown = (e && e.currentTarget) ? e.currentTarget.closest('.notif-bell-wrap')?.querySelector('.notif-dropdown') : null;
-  if (dropdown) {
-    const wasOpen = dropdown.classList.contains('show');
-    document.querySelectorAll('.notif-dropdown.show').forEach(dd => dd.classList.remove('show'));
-    if (!wasOpen) dropdown.classList.add('show');
+  /* Find the dropdown relative to the button clicked, or toggle all */
+  const btn = e ? e.currentTarget : null;
+  const wrap = btn ? btn.closest('.notif-bell-wrap') : null;
+  const dropdown = wrap ? wrap.querySelector('.notif-dropdown') : document.getElementById('notifDropdown');
+
+  if (!dropdown) return;
+
+  const wasOpen = dropdown.classList.contains('show');
+  /* Close all other dropdowns first */
+  document.querySelectorAll('.notif-dropdown.show').forEach(dd => dd.classList.remove('show'));
+
+  if (!wasOpen) {
+    dropdown.classList.add('show');
+    dropdown.style.display = 'flex';
+    if (!notifsLoaded) loadNotifications();
   } else {
-    document.querySelectorAll('.notif-dropdown').forEach(dd => dd.classList.toggle('show'));
-  }
-  const anyShown = Array.from(document.querySelectorAll('.notif-dropdown')).some(dd => dd.classList.contains('show'));
-  if (anyShown && !notifsLoaded) {
-    loadNotifications();
+    dropdown.style.display = '';
   }
 }
 
